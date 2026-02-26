@@ -1,0 +1,156 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://autotrade:password@postgres:5432/autotrade_dev
+      - TIMESCALEDB_URL=postgresql://autotrade:password@timescaledb:5432/autotrade_timescale
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - ENVIRONMENT=development
+      - DEBUG=true
+    volumes:
+      - ../:/app
+      - logs:/app/logs
+    depends_on:
+      - postgres
+      - timescaledb
+      - redis
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - autotrade-network
+
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://autotrade:password@postgres:5432/autotrade_dev
+      - TIMESCALEDB_URL=postgresql://autotrade:password@timescaledb:5432/autotrade_timescale
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - ENVIRONMENT=development
+    volumes:
+      - ../:/app
+      - logs:/app/logs
+    depends_on:
+      - postgres
+      - timescaledb
+      - redis
+    command: celery -A tasks worker --loglevel=info --concurrency=2
+    networks:
+      - autotrade-network
+
+  beat:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://autotrade:password@postgres:5432/autotrade_dev
+      - TIMESCALEDB_URL=postgresql://autotrade:password@timescaledb:5432/autotrade_timescale
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    volumes:
+      - ../:/app
+    depends_on:
+      - postgres
+      - timescaledb
+      - redis
+    command: celery -A tasks beat --loglevel=info
+    networks:
+      - autotrade-network
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=autotrade
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=autotrade_dev
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - autotrade-network
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    environment:
+      - POSTGRES_USER=autotrade
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=autotrade_timescale
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    networks:
+      - autotrade-network
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - autotrade-network
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api
+    networks:
+      - autotrade-network
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    networks:
+      - autotrade-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    networks:
+      - autotrade-network
+
+volumes:
+  postgres_data:
+  timescaledb_data:
+  redis_data:
+  grafana_data:
+  prometheus_data:
+  logs:
+
+networks:
+  autotrade-network:
+    driver: bridge

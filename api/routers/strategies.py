@@ -1,0 +1,728 @@
+"""API router for strategies management"""
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, delete
+from sqlalchemy.orm import selectinload
+from typing import List, Optional
+from datetime import datetime, timedelta
+from loguru import logger
+
+from core.database import get_db
+from core.security import get_current_active_user
+from models import User, Strategy, Signal, Indicator, strategy_indicators
+from services.strategy_performance import get_strategy_performance_snapshot
+from api.decorators import cache_response
+from schemas import (
+    StrategyResponse,
+    StrategyCreate,
+    StrategyUpdate,
+    StrategyWithPerformance,
+    StrategyPerformance,
+    StrategyPerformanceSnapshotResponse,
+    BacktestRequest,
+    BacktestResponse
+)
+
+router = APIRouter()
+
+
+async def _get_strategy_indicators_with_params(
+    db: AsyncSession,
+    strategy_id: str
+) -> List[dict]:
+    """Fetch indicators linked to a strategy with their saved parameters."""
+    result = await db.execute(
+        select(Indicator, strategy_indicators.c.parameters)
+        .join(strategy_indicators, Indicator.id == strategy_indicators.c.indicator_id)
+        .where(strategy_indicators.c.strategy_id == strategy_id)
+    )
+
+    indicators = []
+    for indicator_obj, params in result.all():
+        indicators.append({
+            'id': indicator_obj.id,
+            'name': indicator_obj.name,
+            'type': indicator_obj.type,
+            'description': indicator_obj.description,
+            'parameters': params if params is not None else (indicator_obj.parameters or {})
+        })
+
+    return indicators
+
+
+async def _build_strategy_response(strategy: Strategy, db: AsyncSession) -> StrategyResponse:
+    """Build StrategyResponse including indicators with saved params."""
+    indicators = await _get_strategy_indicators_with_params(db, strategy.id)
+    return StrategyResponse(
+        id=strategy.id,
+        user_id=strategy.user_id,
+        account_id=strategy.account_id,
+        name=strategy.name,
+        description=strategy.description,
+        type=strategy.type,
+        parameters=strategy.parameters,
+        assets=strategy.assets,
+        indicators=indicators,
+        is_active=strategy.is_active,
+        total_trades=strategy.total_trades,
+        winning_trades=strategy.winning_trades,
+        losing_trades=strategy.losing_trades,
+        total_profit=strategy.total_profit,
+        total_loss=strategy.total_loss,
+        created_at=strategy.created_at,
+        updated_at=strategy.updated_at,
+        last_executed=strategy.last_executed
+    )
+
+
+@router.get("", response_model=List[StrategyResponse])
+async def get_strategies(
+    active: bool = None,
+    strategy_type: str = None,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all strategies for current user"""
+    from models import AutoTradeConfig
+
+    query = select(Strategy).options(selectinload(Strategy.indicators)).where(Strategy.user_id == current_user.id)
+
+    if active is not None:
+        query = query.where(Strategy.is_active == active)
+
+    if strategy_type:
+        query = query.where(Strategy.type == strategy_type)
+
+    result = await db.execute(query)
+    strategies = result.scalars().all()
+
+    responses = []
+    for strategy in strategies:
+        # Buscar autotrade_config para verificar o estado real
+        autotrade_config_result = await db.execute(
+            select(AutoTradeConfig).where(AutoTradeConfig.strategy_id == strategy.id)
+        )
+        autotrade_config = autotrade_config_result.scalar_one_or_none()
+
+        # Usar autotrade_config.is_active se existir, senão strategy.is_active
+        actual_is_active = autotrade_config.is_active if autotrade_config else strategy.is_active
+
+        responses.append(
+            StrategyResponse(
+                id=strategy.id,
+                user_id=strategy.user_id,
+                account_id=strategy.account_id,
+                name=strategy.name,
+                description=strategy.description,
+                type=strategy.type,
+                parameters=strategy.parameters,
+                assets=strategy.assets,
+                indicators=[{
+                    'id': ind.id,
+                    'name': ind.name,
+                    'type': ind.type
+                } for ind in strategy.indicators] if strategy.indicators else [],
+                is_active=actual_is_active,
+                total_trades=strategy.total_trades,
+                winning_trades=strategy.winning_trades,
+                losing_trades=strategy.losing_trades,
+                total_profit=strategy.total_profit,
+                total_loss=strategy.total_loss,
+                created_at=strategy.created_at,
+                updated_at=strategy.updated_at,
+                last_executed=strategy.last_executed
+            )
+        )
+
+    return responses
+
+
+@router.get("/performance", response_model=List[StrategyPerformanceSnapshotResponse])
+@cache_response(ttl=60, key_prefix="strategies:performance")
+async def get_strategy_performance(
+    strategy_id: Optional[str] = None,
+    period: str = "30d",
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get cached strategy performance metrics"""
+    query = select(Strategy).where(Strategy.user_id == current_user.id)
+
+    if strategy_id:
+        query = query.where(Strategy.id == strategy_id)
+
+    result = await db.execute(query)
+    strategies = result.scalars().all()
+
+    if strategy_id and not strategies:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Strategy not found"
+        )
+
+    responses: List[StrategyPerformanceSnapshotResponse] = []
+    for strategy in strategies:
+        try:
+            snapshot = await get_strategy_performance_snapshot(
+                db=db,
+                user_id=current_user.id,
+                strategy_id=strategy.id,
+                period=period
+            )
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid period"
+            )
+
+        monthly_returns = snapshot.monthly_returns or []
+        if len(monthly_returns) < 12:
+            monthly_returns = monthly_returns + [0.0] * (12 - len(monthly_returns))
+
+        performance = StrategyPerformance(
+            total_trades=snapshot.total_trades,
+            winning_trades=snapshot.winning_trades,
+            losing_trades=snapshot.losing_trades,
+            win_rate=snapshot.win_rate,
+            total_profit=snapshot.total_profit,
+            total_loss=snapshot.total_loss,
+            net_profit=snapshot.net_profit,
+            profit_factor=snapshot.profit_factor,
+            max_drawdown=snapshot.max_drawdown,
+            sharpe_ratio=snapshot.sharpe_ratio,
+            avg_win=snapshot.avg_win,
+            avg_loss=snapshot.avg_loss,
+            largest_win=snapshot.largest_win,
+            largest_loss=snapshot.largest_loss,
+            consecutive_wins=snapshot.consecutive_wins,
+            consecutive_losses=snapshot.consecutive_losses,
+            monthly_returns=monthly_returns
+        )
+
+        responses.append(
+            StrategyPerformanceSnapshotResponse(
+                strategy_id=strategy.id,
+                strategy_name=strategy.name,
+                performance=performance,
+                snapshot_date=snapshot.end_date
+            )
+        )
+
+    return responses
+
+
+@router.post("", response_model=StrategyResponse, status_code=status.HTTP_201_CREATED)
+async def create_strategy(
+    strategy_data: StrategyCreate,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create a new strategy"""
+    strategy = Strategy(
+        user_id=current_user.id,
+        account_id=strategy_data.account_id,
+        name=strategy_data.name,
+        description=strategy_data.description,
+        type=strategy_data.type,
+        parameters=strategy_data.parameters,
+        assets=strategy_data.assets,
+        is_active=False  # Estratégias criadas devem vir desligadas por padrão
+    )
+
+    db.add(strategy)
+    await db.commit()
+    await db.refresh(strategy)
+
+    # Associar indicadores à estratégia
+    if strategy_data.indicators:
+        for indicator_data in strategy_data.indicators:
+            # Buscar indicador por ID
+            result = await db.execute(
+                select(Indicator).where(Indicator.id == indicator_data['id'])
+            )
+            indicator = result.scalar_one_or_none()
+            
+            if indicator:
+                # Inserir na tabela de associação
+                await db.execute(
+                    strategy_indicators.insert().values(
+                        strategy_id=strategy.id,
+                        indicator_id=indicator.id,
+                        parameters=indicator_data.get('parameters', {})
+                    )
+                )
+        
+        await db.commit()
+
+    # Criar AutoTradeConfig padrão para a estratégia
+    from models import AutoTradeConfig
+    from datetime import datetime
+    
+    autotrade_config = AutoTradeConfig(
+        account_id=strategy.account_id,
+        strategy_id=strategy.id,
+        amount=1.0,
+        stop1=3,
+        stop2=5,
+        soros=0,
+        martingale=0,
+        timeframe=5,
+        min_confidence=0.7,
+        is_active=False,
+        last_activity_timestamp=datetime.utcnow(),
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow()
+    )
+    db.add(autotrade_config)
+    await db.commit()
+    await db.refresh(autotrade_config)
+    
+    logger.info(f"AutoTrade config criado para estratégia {strategy.id}")
+
+    return StrategyResponse(
+        id=strategy.id,
+        user_id=strategy.user_id,
+        account_id=strategy.account_id,
+        name=strategy.name,
+        type=strategy.type,
+        parameters=strategy.parameters,
+        assets=strategy.assets,
+        is_active=strategy.is_active,
+        total_trades=strategy.total_trades,
+        winning_trades=strategy.winning_trades,
+        losing_trades=strategy.losing_trades,
+        total_profit=strategy.total_profit,
+        total_loss=strategy.total_loss,
+        created_at=strategy.created_at,
+        updated_at=strategy.updated_at,
+        last_executed=strategy.last_executed
+    )
+
+
+@router.get("/{strategy_id}", response_model=StrategyWithPerformance)
+async def get_strategy(
+    strategy_id: str,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get strategy details with performance"""
+    result = await db.execute(
+        select(Strategy).options(selectinload(Strategy.indicators)).where(
+            Strategy.id == strategy_id,
+            Strategy.user_id == current_user.id
+        )
+    )
+    strategy = result.scalar_one_or_none()
+
+    if not strategy:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Strategy not found"
+        )
+
+    # Calculate performance metrics
+    total_trades = strategy.total_trades
+    win_rate = (strategy.winning_trades / total_trades * 100) if total_trades > 0 else 0.0
+    net_profit = strategy.total_profit - strategy.total_loss
+    profit_factor = (strategy.total_profit / strategy.total_loss) if strategy.total_loss > 0 else (float('inf') if strategy.total_profit > 0 else 0.0)
+
+    performance = StrategyPerformance(
+        total_trades=total_trades,
+        winning_trades=strategy.winning_trades,
+        losing_trades=strategy.losing_trades,
+        win_rate=win_rate,
+        total_profit=strategy.total_profit,
+        total_loss=strategy.total_loss,
+        net_profit=net_profit,
+        profit_factor=profit_factor
+    )
+
+    indicators_list = await _get_strategy_indicators_with_params(db, strategy.id)
+    
+    return StrategyWithPerformance(
+        id=strategy.id,
+        user_id=strategy.user_id,
+        account_id=strategy.account_id,
+        name=strategy.name,
+        description=strategy.description,
+        type=strategy.type,
+        parameters=strategy.parameters,
+        assets=strategy.assets,
+        indicators=indicators_list,
+        is_active=strategy.is_active,
+        total_trades=strategy.total_trades,
+        winning_trades=strategy.winning_trades,
+        losing_trades=strategy.losing_trades,
+        total_profit=strategy.total_profit,
+        total_loss=strategy.total_loss,
+        created_at=strategy.created_at,
+        updated_at=strategy.updated_at,
+        last_executed=strategy.last_executed,
+        performance=performance
+    )
+
+
+@router.put("/{strategy_id}", response_model=StrategyResponse)
+async def update_strategy(
+    strategy_id: str,
+    strategy_update: StrategyUpdate,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update strategy"""
+    result = await db.execute(
+        select(Strategy).where(
+            Strategy.id == strategy_id,
+            Strategy.user_id == current_user.id
+        )
+    )
+    strategy = result.scalar_one_or_none()
+
+    if not strategy:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Strategy not found"
+        )
+
+    if strategy_update.name is not None:
+        strategy.name = strategy_update.name
+    
+    if strategy_update.description is not None:
+        strategy.description = strategy_update.description
+
+    if strategy_update.is_active is not None:
+        strategy.is_active = strategy_update.is_active
+        
+        # Atualizar também o autotrade_config vinculado à estratégia
+        from models import AutoTradeConfig, Account
+        autotrade_config_result = await db.execute(
+            select(AutoTradeConfig).where(AutoTradeConfig.strategy_id == strategy_id)
+        )
+        autotrade_config = autotrade_config_result.scalar_one_or_none()
+        
+        if autotrade_config:
+            account_result = await db.execute(
+                select(Account).where(Account.id == autotrade_config.account_id)
+            )
+            account = account_result.scalar_one_or_none()
+            if not account:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Account not found"
+                )
+
+            if strategy_update.is_active:
+                connection_type = None
+                ssid = None
+
+                if account.autotrade_demo:
+                    connection_type = 'demo'
+                    ssid = account.ssid_demo
+                    # Extrair apenas o session ID do SSID completo se necessário
+                    if ssid and ssid.startswith('42['):
+                        try:
+                            import json
+                            json_start = ssid.find("{")
+                            json_end = ssid.rfind("}") + 1
+                            if json_start != -1 and json_end > json_start:
+                                json_part = ssid[json_start:json_end]
+                                data = json.loads(json_part)
+                                ssid = data.get("session", ssid)
+                        except:
+                            pass
+                    if not ssid:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="SSID demo não cadastrado para esta conta"
+                        )
+                elif account.autotrade_real:
+                    connection_type = 'real'
+                    ssid = account.ssid_real
+                    # Extrair apenas o session ID do SSID completo se necessário
+                    if ssid and ssid.startswith('42['):
+                        try:
+                            import json
+                            json_start = ssid.find("{")
+                            json_end = ssid.rfind("}") + 1
+                            if json_start != -1 and json_end > json_start:
+                                json_part = ssid[json_start:json_end]
+                                data = json.loads(json_part)
+                                ssid = data.get("session", ssid)
+                        except:
+                            pass
+                    if not ssid:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="SSID real não cadastrado para esta conta"
+                        )
+                else:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Nenhum modo de operação ativo. Ative o modo demo ou real antes de ligar a estratégia."
+                    )
+                # Validar que o modo selecionado corresponde ao SSID usado
+                if connection_type == 'demo' and not account.autotrade_demo:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Modo demo não está ativo. Ative o modo demo antes de ligar a estratégia."
+                    )
+                if connection_type == 'real' and not account.autotrade_real:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Modo real não está ativo. Ative o modo real antes de ligar a estratégia."
+                    )
+
+                from services.data_collector.realtime import data_collector
+                if data_collector:
+                    connected = await data_collector.connection_manager.ensure_connection(
+                        account.id,
+                        connection_type,
+                        ssid
+                    )
+                    if not connected:
+                        raise HTTPException(
+                            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                            detail="Não foi possível conectar ao WebSocket"
+                        )
+                else:
+                    logger.warning("DataCollector não disponível para conectar websocket")
+
+            # Enviar notificação se autotrade foi reabilitado ou desativado
+            if strategy_update.is_active != autotrade_config.is_active:
+                try:
+                    from services.notifications.telegram import telegram_service
+
+                    # Buscar chat_id do usuário (usando contexto assíncrono existente)
+                    result = await db.execute(
+                        select(Account).join(User, Account.user_id == User.id).where(Account.id == autotrade_config.account_id)
+                    )
+                    account_with_user = result.scalar_one_or_none()
+                    if account_with_user and account_with_user.user:
+                        user_chat_id = account_with_user.user.telegram_chat_id
+                        if user_chat_id:
+                            # Determinar tipo de conta (demo/real)
+                            account_type = None
+                            if account_with_user.autotrade_demo:
+                                account_type = 'demo'
+                            elif account_with_user.autotrade_real:
+                                account_type = 'real'
+                            
+                            if strategy_update.is_active:
+                                # Autotrade foi reabilitado - resetar contadores consecutivos e totais
+                                autotrade_config.win_consecutive = 0
+                                autotrade_config.loss_consecutive = 0
+                                autotrade_config.total_wins = 0
+                                autotrade_config.total_losses = 0
+                                autotrade_config.soros_level = 0
+                                autotrade_config.soros_amount = 0.0
+                                autotrade_config.martingale_level = 0
+                                autotrade_config.martingale_amount = 0.0
+                                autotrade_config.highest_balance = None
+                                autotrade_config.initial_balance = None
+                                logger.info(f"✓ Contadores consecutivos, totais e balances resetados ao reativar autotrade na estratégia {strategy_id}")
+                                
+                                await telegram_service.send_message(
+                                    f"""
+🔄 <b>AUTOTRADE REABILITADO!</b>
+
+📊 Estratégia: {strategy.name}
+👤 Conta: {account_with_user.name}
+🏷️ Tipo: {account_type.upper() if account_type else 'N/A'}
+⚡ Autotrade foi reativado
+
+⏰ {(datetime.utcnow() - timedelta(hours=3)).strftime('%H:%M:%S')}
+""",
+                                    chat_id=user_chat_id
+                                )
+                            else:
+                                # Autotrade foi desativado
+                                await telegram_service.send_message(
+                                    f"""
+⏸️ <b>AUTOTRADE DESATIVADO!</b>
+
+📊 Estratégia: {strategy.name}
+👤 Conta: {account_with_user.name}
+🏷️ Tipo: {account_type.upper() if account_type else 'N/A'}
+🛑 Autotrade foi desativado
+
+⏰ {(datetime.utcnow() - timedelta(hours=3)).strftime('%H:%M:%S')}
+""",
+                                    chat_id=user_chat_id
+                                )
+                except Exception as e:
+                    logger.error(f"Erro ao enviar notificação de autotrade: {e}")
+            
+            autotrade_config.is_active = strategy_update.is_active
+            autotrade_config.updated_at = datetime.utcnow()
+            # Atualizar last_activity_timestamp quando estratégia é ativada
+            if strategy_update.is_active:
+                autotrade_config.last_activity_timestamp = datetime.utcnow()
+            logger.info(f"AutoTrade config is_active atualizado para {strategy_update.is_active} na estratégia {strategy_id}")
+            
+            await db.commit()
+            autotrade_config.updated_at = datetime.utcnow()
+            logger.info(f"AutoTrade config is_active atualizado para {strategy_update.is_active} na estratégia {strategy_id}")
+            
+            # Invalidar cache de configs no data_collector
+            from services.data_collector.realtime import data_collector
+            if data_collector:
+                data_collector.invalidate_autotrade_configs_cache()
+                logger.info(f"✓ Cache de configs invalidado após alteração de is_active")
+    
+    if strategy_update.parameters is not None:
+        strategy.parameters = strategy_update.parameters
+    
+    if strategy_update.assets is not None:
+        strategy.assets = strategy_update.assets
+    
+    # Atualizar indicadores se fornecidos
+    if strategy_update.indicators is not None:
+        # Deletar indicadores existentes
+        await db.execute(
+            delete(strategy_indicators).where(strategy_indicators.c.strategy_id == strategy_id)
+        )
+        
+        # Adicionar novos indicadores
+        for indicator_data in strategy_update.indicators:
+            result = await db.execute(
+                select(Indicator).where(Indicator.id == indicator_data['id'])
+            )
+            indicator = result.scalar_one_or_none()
+            
+            if indicator:
+                await db.execute(
+                    strategy_indicators.insert().values(
+                        strategy_id=strategy_id,
+                        indicator_id=indicator.id,
+                        parameters=indicator_data.get('parameters', {})
+                    )
+                )
+
+    strategy.updated_at = datetime.utcnow()
+    
+    await db.commit()
+    await db.refresh(strategy)
+
+    if strategy_update.parameters is not None or strategy_update.indicators is not None:
+        # Invalidar cache de configs no data_collector
+        from services.data_collector.realtime import data_collector
+        if data_collector:
+            data_collector.invalidate_autotrade_configs_cache()
+            logger.info("✓ Cache de configs invalidado após alteração de parâmetros/indicadores")
+
+    return await _build_strategy_response(strategy, db)
+
+
+@router.delete("/{strategy_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_strategy(
+    strategy_id: str,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete strategy"""
+    result = await db.execute(
+        select(Strategy).where(
+            Strategy.id == strategy_id,
+            Strategy.user_id == current_user.id
+        )
+    )
+    strategy = result.scalar_one_or_none()
+
+    if not strategy:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Strategy not found"
+        )
+
+    # Delete related autotrade configs first
+    from models import AutoTradeConfig
+    configs_result = await db.execute(
+        select(AutoTradeConfig).where(AutoTradeConfig.strategy_id == strategy_id)
+    )
+    configs = configs_result.scalars().all()
+    for config in configs:
+        await db.delete(config)
+
+    # Delete related trades
+    from models import Trade
+    trades_result = await db.execute(
+        select(Trade).where(Trade.strategy_id == strategy_id)
+    )
+    trades = trades_result.scalars().all()
+    for trade in trades:
+        await db.delete(trade)
+
+    # Delete related strategy indicators (association table)
+    from models import strategy_indicators
+    await db.execute(
+        strategy_indicators.delete().where(strategy_indicators.c.strategy_id == strategy_id)
+    )
+
+    # Now delete the strategy
+    await db.delete(strategy)
+    await db.commit()
+
+    # Invalidar cache de configs no data_collector
+    from services.data_collector.realtime import data_collector
+    if data_collector:
+        data_collector._autotrade_configs = None
+        data_collector._configs_cache_last_updated = 0
+        data_collector._configured_timeframes = None
+        data_collector._configured_timeframe = None
+        data_collector._config_last_updated = 0
+        logger.info("✓ Cache de configs invalidado após exclusão de estratégia")
+
+
+@router.post("/{strategy_id}/backtest", response_model=BacktestResponse)
+async def backtest_strategy(
+    strategy_id: str,
+    request: BacktestRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Backtest a strategy"""
+    # Verify strategy ownership
+    result = await db.execute(
+        select(Strategy).where(
+            Strategy.id == strategy_id,
+            Strategy.user_id == current_user.id
+        )
+    )
+    strategy = result.scalar_one_or_none()
+
+    if not strategy:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Strategy not found"
+        )
+
+    # Import strategy manager
+    from services.strategies.manager import StrategyManager
+
+    try:
+        # Run backtest
+        strategy_manager = StrategyManager()
+        results = await strategy_manager.backtest_strategy(
+            strategy_id=strategy_id,
+            start_date=request.start_date,
+            end_date=request.end_date
+        )
+
+        return BacktestResponse(
+            strategy_id=strategy_id,
+            start_date=request.start_date,
+            end_date=request.end_date,
+            results=results
+        )
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Backtest failed for strategy {strategy_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro ao executar backtest. Entre em contato com o suporte."
+        )

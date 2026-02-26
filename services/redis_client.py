@@ -1,0 +1,124 @@
+"""Redis Client - Cliente assíncrono para Redis"""
+import redis.asyncio as redis
+from typing import Any, Optional
+from loguru import logger
+import json
+
+
+class RedisClient:
+    """Cliente assíncrono para Redis"""
+
+    def __init__(self):
+        self.redis: Optional[redis.Redis] = None
+        self.connected = False
+
+    async def connect(
+        self,
+        host: str = "localhost",
+        port: int = 6379,
+        db: int = 0,
+        password: Optional[str] = None
+    ):
+        """Conectar ao Redis"""
+        try:
+            self.redis = await redis.from_url(
+                f"redis://{host}:{port}/{db}",
+                password=password,
+                encoding="utf-8",
+                decode_responses=True
+            )
+            await self.redis.ping()
+            self.connected = True
+            logger.info(f"✅ Redis conectado: {host}:{port}")
+        except Exception as e:
+            logger.error(f"❌ Erro ao conectar ao Redis: {e}")
+            raise
+
+    async def disconnect(self):
+        """Desconectar do Redis"""
+        if self.redis:
+            await self.redis.close()
+            self.connected = False
+            logger.info("🔌 Redis desconectado")
+
+    async def get(self, key: str) -> Optional[str]:
+        """Obter valor do Redis"""
+        if not self.connected:
+            return None
+        try:
+            return await self.redis.get(key)
+        except Exception as e:
+            logger.error(f"Erro ao obter chave {key}: {e}")
+            return None
+
+    async def set(self, key: str, value: str, ttl: int = 300):
+        """Definir valor no Redis com TTL"""
+        if not self.connected:
+            return
+        try:
+            await self.redis.setex(key, ttl, value)
+        except Exception as e:
+            logger.error(f"Erro ao definir chave {key}: {e}")
+
+    async def delete(self, key: str):
+        """Deletar chave do Redis"""
+        if not self.connected:
+            return
+        try:
+            await self.redis.delete(key)
+        except Exception as e:
+            logger.error(f"Erro ao deletar chave {key}: {e}")
+
+    async def exists(self, key: str) -> bool:
+        """Verificar se chave existe"""
+        if not self.connected:
+            return False
+        try:
+            return await self.redis.exists(key) > 0
+        except Exception as e:
+            logger.error(f"Erro ao verificar chave {key}: {e}")
+            return False
+
+    async def get_json(self, key: str) -> Optional[Any]:
+        """Obter valor JSON do Redis"""
+        value = await self.get(key)
+        if value:
+            try:
+                return json.loads(value)
+            except json.JSONDecodeError:
+                return None
+        return None
+
+    async def set_json(self, key: str, value: Any, ttl: int = 300):
+        """Definir valor JSON no Redis"""
+        try:
+            json_value = json.dumps(value)
+            await self.set(key, json_value, ttl)
+        except Exception as e:
+            logger.error(f"Erro ao definir JSON {key}: {e}")
+
+    async def clear_pattern(self, pattern: str):
+        """Deletar todas as chaves que correspondem ao padrão"""
+        if not self.connected:
+            return
+        try:
+            keys = await self.redis.keys(pattern)
+            if keys:
+                await self.redis.delete(*keys)
+                logger.debug(f"🗑️ Deletadas {len(keys)} chaves: {pattern}")
+        except Exception as e:
+            logger.error(f"Erro ao limpar padrão {pattern}: {e}")
+
+    async def flush_all(self):
+        """Limpar todas as chaves do Redis"""
+        if not self.connected:
+            return
+        try:
+            await self.redis.flushdb()
+            logger.info("🗑️ Redis limpo completamente")
+        except Exception as e:
+            logger.error(f"Erro ao limpar Redis: {e}")
+
+
+# Instância global do cliente Redis
+redis_client = RedisClient()
