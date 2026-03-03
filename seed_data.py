@@ -4,7 +4,8 @@ from datetime import datetime
 from sqlalchemy import select
 from core.database import get_db_context
 from core.security import get_password_hash
-from models import User, Strategy, UserRole
+from models.user import User
+from models.strategy import Strategy
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -30,7 +31,7 @@ async def seed_admin_user():
             username="admin",
             hashed_password=get_password_hash("@Leandro1228"),
             full_name="Administrador",
-            role=UserRole.ADMIN,
+            role="admin",  # String literal em vez de enum
             is_active=True,
             is_verified=True,
             created_at=datetime.utcnow()
