@@ -169,6 +169,7 @@ export default function AutoTradeConfigScreen() {
                 min_confidence: existingConfig.min_confidence,
                 cooldown_seconds: existingConfig.cooldown_seconds || 0,
                 trade_timing: existingConfig.trade_timing || 'on_signal',
+                execute_all_signals: existingConfig.execute_all_signals ?? false,
                 // Redução Inteligente
                 smart_reduction_enabled: existingConfig.smart_reduction_enabled ?? false,
                 smart_reduction_loss_trigger: existingConfig.smart_reduction_loss_trigger || 3,
@@ -285,6 +286,8 @@ export default function AutoTradeConfigScreen() {
       setError(null);
 
       console.log('[AutoTradeConfig] Salvando configuração...');
+      console.log('[AutoTradeConfig] config.amount:', config.amount);
+      console.log('[AutoTradeConfig] existingConfigId:', existingConfigId);
       console.log('[AutoTradeConfig] config:', config);
       console.log('[AutoTradeConfig] stop_amount_win:', config.stop_amount_win);
       console.log('[AutoTradeConfig] stop_amount_loss:', config.stop_amount_loss);
@@ -436,6 +439,12 @@ export default function AutoTradeConfigScreen() {
                     value={amountText}
                     onChangeText={setAmountText}
                     onBlur={() => {
+                      // Tratar string vazia ou apenas ponto como 0
+                      if (amountText === '' || amountText === '.') {
+                        setConfig({ ...config, amount: 0 });
+                        setAmountText('0');
+                        return;
+                      }
                       const value = parseFloat(amountText);
                       if (!isNaN(value) && value >= 0) {
                         setConfig({ ...config, amount: value });

@@ -1,2 +1,15 @@
-2026-03-03 14:41:41 | WARNING  |                 |        |      | api.main:lifespan:266 | ⚠️ Cache initialization failed: object InMemoryCache can't be used in 'await' expression
-2026-03-03 14:41:41 | WARNING  |                 |        |      | services.data_collector.local_storage:_clear_actives_folder:76 | Aviso ao criar pasta: BaseEventLoop.run_in_executor() got an unexpected keyword argument 'exist_ok'
+2026-03-03 16:32:00 | WARNING  |                 |        |      | services.data_collector.realtime:_start_ativos_monitoring:1067 | Ativos indisponíveis ignorados: ['#AMZN_otc', '#FDX_otc']
+2026-03-03 16:33:00 | WARNING  |                 |        |      | services.data_collector.realtime:_rebalance_assets:1286 | [Rebalance] #VISA_otc: NUNCA recebeu ticks desde a inscrição
+2026-03-03 16:33:00 | WARNING  |                 |        |      | services.data_collector.realtime:_rebalance_assets:1333 | [Rebalance] ATIVOS Client 1: apenas 9 ativos monitorados, precisa de 1 mais
+2026-03-03 16:34:01 | WARNING  |                 |        |      | services.data_collector.realtime:_rebalance_assets:1286 | [Rebalance] #AMZN_otc: NUNCA recebeu ticks desde a inscrição
+2026-03-03 16:34:01 | WARNING  |                 |        |      | services.data_collector.realtime:_rebalance_assets:1333 | [Rebalance] ATIVOS Client 1: apenas 8 ativos monitorados, precisa de 2 mais
+2026-03-03 16:35:01 | WARNING  |                 |        |      | services.data_collector.realtime:_rebalance_assets:1286 | [Rebalance] #AMZN_otc: NUNCA recebeu ticks desde a inscrição
+2026-03-03 16:35:01 | WARNING  |                 |        |      | services.data_collector.realtime:_rebalance_assets:1333 | [Rebalance] ATIVOS Client 1: apenas 9 ativos monitorados, precisa de 1 mais
+2026-03-03 16:36:02 | WARNING  |                 |        |      | services.data_collector.realtime:_rebalance_assets:1286 | [Rebalance] #AMZN_otc: NUNCA recebeu ticks desde a inscrição
+2026-03-03 16:36:02 | WARNING  |                 |        |      | services.data_collector.realtime:_rebalance_assets:1333 | [Rebalance] ATIVOS Client 1: apenas 9 ativos monitorados, precisa de 1 mais
+2026-03-03 16:37:02 | WARNING  |                 |        |      | services.data_collector.realtime:_rebalance_assets:1286 | [Rebalance] #AMZN_otc: NUNCA recebeu ticks desde a inscrição
+2026-03-03 16:37:02 | WARNING  |                 |        |      | services.data_collector.realtime:_rebalance_assets:1333 | [Rebalance] ATIVOS Client 1: apenas 9 ativos monitorados, precisa de 1 mais
+2026-03-03 16:38:03 | WARNING  |                 |        |      | services.data_collector.realtime:_rebalance_assets:1286 | [Rebalance] #AMZN_otc: NUNCA recebeu ticks desde a inscrição
+2026-03-03 16:38:03 | WARNING  |                 |        |      | services.data_collector.realtime:_rebalance_assets:1333 | [Rebalance] ATIVOS Client 1: apenas 9 ativos monitorados, precisa de 1 mais
+2026-03-03 16:39:04 | WARNING  |                 |        |      | services.data_collector.realtime:_rebalance_assets:1286 | [Rebalance] #AMZN_otc: NUNCA recebeu ticks desde a inscrição
+2026-03-03 16:39:04 | WARNING  |                 |        |      | services.data_collector.realtime:_rebalance_assets:1333 | [Rebalance] ATIVOS Client 1: apenas 9 ativos monitorados, precisa de 1 mais

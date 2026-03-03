@@ -99,6 +99,7 @@ async def create_autotrade_config(
     """Create auto trade configuration"""
     logger.info(f"📥 Recebendo config_data: {config_data}")
     logger.info(f"📥 execute_all_signals recebido: {getattr(config_data, 'execute_all_signals', 'NÃO ENCONTRADO')}")
+    logger.info(f"📥 amount recebido: {getattr(config_data, 'amount', 'NÃO ENCONTRADO')}")
     logger.info(f"📥 config_data.model_dump(): {config_data.model_dump()}")
     logger.info(f"📥 config_data.model_dump(exclude_unset=True): {config_data.model_dump(exclude_unset=True)}")
 
@@ -281,6 +282,10 @@ async def get_autotrade_configs(
     result = await db.execute(query)
     configs = result.scalars().all()
     
+    # DEBUG: Log execute_all_signals from database
+    for config in configs:
+        logger.info(f"[DEBUG] get_autotrade_configs - Config {config.id}: execute_all_signals={config.execute_all_signals}")
+    
     return configs
 
 
@@ -332,6 +337,15 @@ async def update_autotrade_config(
     
     # Update fields
     update_payload = config_data.model_dump(exclude_unset=True)
+    
+    # DEBUG: Log execute_all_signals value
+    logger.info(f"[DEBUG] update_autotrade_config - Received execute_all_signals: {update_payload.get('execute_all_signals')}")
+    logger.info(f"[DEBUG] update_autotrade_config - Full payload keys: {list(update_payload.keys())}")
+    
+    # DEBUG: Log amount specifically
+    logger.info(f"[DEBUG] update_autotrade_config - Received amount: {update_payload.get('amount')}, type: {type(update_payload.get('amount'))}")
+    logger.info(f"[DEBUG] update_autotrade_config - Current config amount before: {config.amount}")
+    
     if update_payload.get("strategy_id") is None:
         update_payload.pop("strategy_id", None)
     reset_consecutive = False
@@ -349,6 +363,10 @@ async def update_autotrade_config(
 
     for key, value in update_payload.items():
         setattr(config, key, value)
+    
+    # DEBUG: Log after setting values
+    logger.info(f"[DEBUG] update_autotrade_config - Config amount after setattr: {config.amount}")
+    logger.info(f"[DEBUG] update_autotrade_config - Config execute_all_signals after setattr: {config.execute_all_signals}")
 
     if reset_consecutive:
         config.win_consecutive = 0
@@ -402,6 +420,7 @@ async def update_autotrade_config(
     await db.commit()
     await db.refresh(config)
     
+    logger.info(f"[DEBUG] update_autotrade_config - Config amount after commit: {config.amount}")
     logger.info(f"AutoTrade config {config_id} updated")
 
     try:
