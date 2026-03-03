@@ -560,11 +560,11 @@ class DataCollectorService:
         logger.success("Coleta de dados parada")
 
     async def _periodic_assets_update(self):
-        """Atualizar assets periodicamente reconectando o payout a cada 5s"""
+        """Atualizar assets periodicamente - verifica conexão a cada 30s e só reconecta se necessário"""
         update_count = 0
         while self.is_running:
             try:
-                await asyncio.sleep(5)  # Esperar 5 segundos
+                await asyncio.sleep(30)  # Verificar a cada 30 segundos (não 5s)
                 
                 if not self.is_running:
                     break
@@ -572,47 +572,61 @@ class DataCollectorService:
                 # Verificar se está em manutenção
                 from services.pocketoption.maintenance_checker import maintenance_checker
                 if maintenance_checker.is_under_maintenance:
-                    logger.debug("[PAUSED] Sistema em manutenção, não reconectando payout")
+                    logger.debug("[PAUSED] Sistema em manutenção, pulando verificação de payout")
                     continue
                 
-                # Reconectar o payout para obter dados atualizados
-                logger.info("Reconectando payout para obter dados atualizados...")
+                # Verificar se o payout_client está conectado e saudável
                 if self.payout_client:
                     try:
-                        # Desconectar
-                        await self.payout_client.disconnect()
-                        logger.info("[OK] Payout desconectado")
-
-                        # Aguardar um pouco
-                        await asyncio.sleep(2)
-
-                        # Reconectar
-                        await self.payout_client.connect()
-                        logger.info("[OK] Payout reconectado")
-
-                        # Registrar callback novamente após reconexão
-                        if hasattr(self.payout_client, '_keep_alive_manager') and self.payout_client._keep_alive_manager:
-                            self.payout_client._keep_alive_manager.add_event_handler("assets_update", self._on_payout_data)
-                            logger.info("[OK] Callback _on_payout_data registrado novamente")
-
-                        # Aguardar coleta de dados
-                        await asyncio.sleep(5)
-
-                        # Verificar se temos assets atualizados
-                        assets_count = await self._get_assets_count()
-                        logger.info(f"[OK] Payout atualizado: {assets_count} assets")
-
+                        # Verificar se conexão ainda está ativa (is_connected property)
+                        is_healthy = hasattr(self.payout_client, 'is_connected') and self.payout_client.is_connected
+                        
+                        if not is_healthy:
+                            logger.warning("[WARNING] Payout connection lost, reconnecting...")
+                            
+                            # Tentar reconectar
+                            try:
+                                await self.payout_client.disconnect()
+                            except:
+                                pass  # Ignora erro ao desconectar se já estava morto
+                            
+                            await asyncio.sleep(2)
+                            
+                            connected = await self.payout_client.connect()
+                            if connected:
+                                logger.info("[OK] Payout reconectado")
+                                
+                                # Registrar callback novamente após reconexão
+                                if hasattr(self.payout_client, '_keep_alive_manager') and self.payout_client._keep_alive_manager:
+                                    self.payout_client._keep_alive_manager.add_event_handler("assets_update", self._on_payout_data)
+                                    logger.info("[OK] Callback _on_payout_data registrado novamente")
+                                
+                                # Aguardar coleta de dados
+                                await asyncio.sleep(5)
+                                
+                                # Verificar se temos assets atualizados
+                                assets_count = await self._get_assets_count()
+                                logger.info(f"[OK] Payout atualizado: {assets_count} assets")
+                            else:
+                                logger.error("[ERROR] Falha ao reconectar payout")
+                        else:
+                            # Conexão está saudável, apenas loga periodicamente (a cada 10 ciclos = 5 minutos)
+                            update_count += 1
+                            if update_count % 10 == 0:
+                                assets_count = await self._get_assets_count()
+                                logger.info(f"[OK] Payout connection healthy: {assets_count} assets")
+                            
                     except Exception as e:
-                        logger.error(f"[ERROR] Falha ao reconectar payout: {e}")
-                
-                update_count += 1
-                
+                        logger.error(f"[ERROR] Erro ao verificar/reconectar payout: {e}")
+                else:
+                    logger.warning("[WARNING] payout_client não configurado")
+                    
             except asyncio.CancelledError:
                 logger.info("Tarefa periódica de atualização de assets cancelada")
                 break
             except Exception as e:
                 logger.error(f"[ERROR] Erro na atualização periódica de assets: {e}")
-                await asyncio.sleep(30)
+                await asyncio.sleep(60)  # Esperar 1 minuto em caso de erro
 
     async def _get_autotrade_config(self, account_id: str) -> Optional[AutoTradeConfig]:
         """Obter configuração de autotrade da conta"""

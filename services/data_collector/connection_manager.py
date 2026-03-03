@@ -118,8 +118,11 @@ class UserConnection:
                     return False
     
     async def disconnect(self):
-        """Desconectar do WebSocket"""
+        """Desconectar do WebSocket - aguarda trades ativos finalizarem"""
         try:
+            # Verificar e aguardar trades ativos antes de desconectar
+            await self._wait_for_active_trades()
+            
             if self.client:
                 await self.client.disconnect()
                 self.is_connected = False
@@ -131,6 +134,100 @@ class UserConnection:
         except Exception as e:
             logger.error(
                 f"{self._get_log_prefix()} [{self.account_id}] Erro ao desconectar {self.connection_type}: {e}",
+                extra={
+                    "user_name": self.user_name,
+                    "account_id": self.account_id[:8] if self.account_id else "",
+                    "account_type": self.connection_type
+                }
+            )
+
+    async def _has_active_trades(self) -> bool:
+        """Verificar se há trades ativos (pendentes ou em execução) para esta conta"""
+        try:
+            from models import Trade, TradeStatus
+            async with get_db_context() as db:
+                result = await db.execute(
+                    text("""
+                        SELECT COUNT(*) as active_count 
+                        FROM trades 
+                        WHERE account_id = :account_id 
+                        AND connection_type = :connection_type
+                        AND status IN ('pending', 'active')
+                    """),
+                    {
+                        "account_id": self.account_id,
+                        "connection_type": self.connection_type
+                    }
+                )
+                row = result.fetchone()
+                active_count = row[0] if row else 0
+                
+                if active_count > 0:
+                    logger.info(
+                        f"{self._get_log_prefix()} [{self.account_id}] Trades ativos encontrados: {active_count}",
+                        extra={
+                            "user_name": self.user_name,
+                            "account_id": self.account_id[:8] if self.account_id else "",
+                            "account_type": self.connection_type
+                        }
+                    )
+                
+                return active_count > 0
+        except Exception as e:
+            logger.error(
+                f"{self._get_log_prefix()} [{self.account_id}] Erro ao verificar trades ativos: {e}",
+                extra={
+                    "user_name": self.user_name,
+                    "account_id": self.account_id[:8] if self.account_id else "",
+                    "account_type": self.connection_type
+                }
+            )
+            return False  # Em caso de erro, assume que não há trades para não bloquear
+
+    async def _wait_for_active_trades(self, max_wait_seconds: int = 60, check_interval: float = 2.0):
+        """Aguardar trades ativos finalizarem antes de desconectar"""
+        try:
+            start_time = asyncio.get_event_loop().time()
+            
+            while True:
+                has_active = await self._has_active_trades()
+                
+                if not has_active:
+                    logger.info(
+                        f"{self._get_log_prefix()} [{self.account_id}] Nenhum trade ativo, desconexão permitida",
+                        extra={
+                            "user_name": self.user_name,
+                            "account_id": self.account_id[:8] if self.account_id else "",
+                            "account_type": self.connection_type
+                        }
+                    )
+                    break
+                
+                elapsed = asyncio.get_event_loop().time() - start_time
+                if elapsed >= max_wait_seconds:
+                    logger.warning(
+                        f"{self._get_log_prefix()} [{self.account_id}] Timeout aguardando trades ativos ({max_wait_seconds}s). Desconectando mesmo com trades pendentes.",
+                        extra={
+                            "user_name": self.user_name,
+                            "account_id": self.account_id[:8] if self.account_id else "",
+                            "account_type": self.connection_type
+                        }
+                    )
+                    break
+                
+                logger.info(
+                    f"{self._get_log_prefix()} [{self.account_id}] Aguardando trades ativos finalizarem... (elapsed: {elapsed:.1f}s)",
+                    extra={
+                        "user_name": self.user_name,
+                        "account_id": self.account_id[:8] if self.account_id else "",
+                        "account_type": self.connection_type
+                    }
+                )
+                await asyncio.sleep(check_interval)
+                
+        except Exception as e:
+            logger.error(
+                f"{self._get_log_prefix()} [{self.account_id}] Erro ao aguardar trades ativos: {e}",
                 extra={
                     "user_name": self.user_name,
                     "account_id": self.account_id[:8] if self.account_id else "",

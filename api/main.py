@@ -260,7 +260,7 @@ async def lifespan(app: FastAPI):
         
         # Initialize cache
         try:
-            cache = await get_cache()
+            cache = get_cache()
             logger.info("✅ Cache backend initialized")
         except Exception as e:
             logger.warning(f"⚠️ Cache initialization failed: {e}")

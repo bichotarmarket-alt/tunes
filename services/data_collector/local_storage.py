@@ -71,7 +71,7 @@ class LocalStorageService:
         # Criar pasta de forma assíncrona
         try:
             loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, self.base_path.mkdir, exist_ok=True)
+            await loop.run_in_executor(None, lambda: self.base_path.mkdir(exist_ok=True))
         except Exception as e:
             logger.warning(f"Aviso ao criar pasta: {e}")
 
