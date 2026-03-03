@@ -55,14 +55,33 @@ def init_database():
     """Inicialização completa do banco"""
     logger.info("🚀 Iniciando setup do banco de dados...")
     
-    # Verificar DATABASE_URL
-    db_url = os.getenv("DATABASE_URL")
-    if not db_url:
-        logger.error("❌ DATABASE_URL não configurado!")
-        logger.info("💡 Configure a variável DATABASE_URL no Railway")
-        return False
+    # Construir DATABASE_URL a partir das variáveis do Railway PostgreSQL
+    pg_host = os.getenv("PGHOST") or os.getenv("RAILWAY_PRIVATE_DOMAIN")
+    pg_user = os.getenv("PGUSER") or os.getenv("POSTGRES_USER")
+    pg_password = os.getenv("PGPASSWORD") or os.getenv("POSTGRES_PASSWORD")
+    pg_database = os.getenv("PGDATABASE") or os.getenv("POSTGRES_DB")
     
-    logger.info(f"✅ DATABASE_URL encontrado")
+    if pg_host and pg_user and pg_password and pg_database:
+        # Construir URL completa
+        db_url = f"postgresql+psycopg2://{pg_user}:{pg_password}@{pg_host}:5432/{pg_database}"
+        os.environ["DATABASE_URL"] = db_url
+        logger.info(f"✅ DATABASE_URL construída: postgresql://{pg_user}:***@{pg_host}:5432/{pg_database}")
+    else:
+        # Verificar DATABASE_URL direto
+        db_url = os.getenv("DATABASE_URL")
+        if not db_url or db_url.startswith("{{"):
+            logger.error("❌ Variáveis do PostgreSQL não encontradas!")
+            logger.info("PGHOST:" + str(pg_host))
+            logger.info("PGUSER:" + str(pg_user))
+            logger.info("PGDATABASE:" + str(pg_database))
+            return False
+        else:
+            # Usar DATABASE_URL existente se válida
+            if "postgresql" in db_url and not db_url.startswith("{{"):
+                logger.info(f"✅ DATABASE_URL encontrada")
+            else:
+                logger.error(f"❌ DATABASE_URL inválida: {db_url[:50]}")
+                return False
     
     # Passo 1: Migrations
     migrations_ok = run_migrations()
