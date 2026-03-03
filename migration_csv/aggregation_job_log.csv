@@ -1,0 +1,16 @@
+id,job_name,started_at,completed_at,records_processed,status,error_message
+1,daily_aggregation_2026-02-27,2026-03-01,2026-03-01,0,failed,Function.__init__() got an unexpected keyword argument 'else_'
+2,daily_aggregation_2026-02-27,2026-03-01,2026-03-01,0,failed,"(sqlite3.OperationalError) no such table: daily_signal_summary
+[SQL: SELECT daily_signal_summary.id AS daily_signal_summary_id, daily_signal_summary.date AS daily_signal_summary_date, daily_signal_summary.strategy_id AS daily_signal_summary_strategy_id, daily_signal_summary.asset_id AS daily_signal_summary_asset_id, daily_signal_summary.timeframe AS daily_signal_summary_timeframe, daily_signal_summary.total_signals AS daily_signal_summary_total_signals, daily_signal_summary.buy_signals AS daily_signal_summary_buy_signals, daily_signal_summary.sell_signals AS daily_signal_summary_sell_signals, daily_signal_summary.hold_signals AS daily_signal_summary_hold_signals, daily_signal_summary.executed_signals AS daily_signal_summary_executed_signals, daily_signal_summary.avg_confidence AS daily_signal_summary_avg_confidence, daily_signal_summary.avg_confluence AS daily_signal_summary_avg_confluence, daily_signal_summary.min_confidence AS daily_signal_summary_min_confidence, daily_signal_summary.max_confidence AS daily_signal_summary_max_confidence, daily_signal_summary.updated_at AS daily_signal_summary_updated_at 
+FROM daily_signal_summary 
+WHERE daily_signal_summary.id = ?]
+[parameters: ('2026-02-27:all:all:0',)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)"
+3,daily_aggregation_2026-02-27,2026-03-01,2026-03-01,1,completed,
+4,daily_aggregation_2026-02-27,2026-03-01,2026-03-01,1,completed,
+5,daily_aggregation_2026-02-27,2026-03-01,2026-03-01,1,completed,
+6,daily_aggregation_2026-02-27,2026-03-01,2026-03-01,1,completed,
+7,daily_aggregation_2026-02-27,2026-03-01,2026-03-01,0,failed,Function.__init__() got an unexpected keyword argument 'else_'
+8,daily_aggregation_2026-02-27,2026-03-01,2026-03-01,1,completed,
+9,daily_aggregation_2026-02-27,2026-03-01,2026-03-01,1,completed,
+10,daily_aggregation_2026-02-27,2026-03-01,2026-03-01,1,completed,

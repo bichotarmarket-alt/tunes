@@ -21,20 +21,6 @@ if __name__ == "__main__":
     print(f"Debug Mode: {settings.DEBUG}")
     print(f"Data Collector: {'[X] Ativado' if settings.DATA_COLLECTOR_ENABLED else '[ ] Desativado'}")
     
-    # Verificar configuracoes do ngrok
-    ngrok_enabled = os.getenv('NGROK_ENABLED', 'false').lower() == 'true'
-    ngrok_token = os.getenv('NGROK_TOKEN')
-    
-    if ngrok_enabled:
-        print(f"Ngrok: [X] Ativado")
-        if ngrok_token:
-            print(f"   Token: {ngrok_token[:10]}...{ngrok_token[-10:]}")
-        else:
-            print(f"   WARNING: NGROK_TOKEN nao configurado!")
-    else:
-        print(f"Ngrok: [ ] Desativado")
-        print(f"   Para ativar: NGROK_ENABLED=true no .env")
-    
     print("=" * 60)
     
     # Disable uvicorn access logs for GET requests

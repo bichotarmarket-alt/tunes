@@ -3,14 +3,19 @@ import redis.asyncio as redis
 from typing import Any, Optional
 from loguru import logger
 import json
+import zlib
+import base64
 
 
 class RedisClient:
-    """Cliente assíncrono para Redis"""
+    """Cliente assíncrono para Redis com compressão opcional"""
 
     def __init__(self):
         self.redis: Optional[redis.Redis] = None
         self.connected = False
+        # Threshold para compressão: dados maiores que 1KB são comprimidos
+        self.compression_threshold = 1024
+        self.compression_level = 1  # Level 1 = rápido, ~60% redução
 
     async def connect(
         self,
@@ -96,6 +101,65 @@ class RedisClient:
             await self.set(key, json_value, ttl)
         except Exception as e:
             logger.error(f"Erro ao definir JSON {key}: {e}")
+
+    async def get_compressed(self, key: str) -> Optional[Any]:
+        """
+        Obter valor comprimido do Redis
+        Descomprime automaticamente se necessário
+        """
+        if not self.connected:
+            return None
+        try:
+            value = await self.redis.get(key)
+            if value is None:
+                return None
+            
+            # Verificar se está comprimido (prefixo 'z:' indica zlib)
+            if isinstance(value, str) and value.startswith('z:'):
+                # Descomprimir
+                compressed = base64.b64decode(value[2:])  # Remove 'z:' prefix
+                decompressed = zlib.decompress(compressed)
+                return json.loads(decompressed.decode('utf-8'))
+            
+            # Não comprimido, tentar JSON
+            try:
+                return json.loads(value)
+            except json.JSONDecodeError:
+                return value
+                
+        except Exception as e:
+            logger.error(f"Erro ao obter valor comprimido {key}: {e}")
+            return None
+
+    async def set_compressed(self, key: str, value: Any, ttl: int = 300):
+        """
+        Definir valor comprimido no Redis
+        Usa compressão zlib level 1 para dados grandes (>1KB)
+        """
+        if not self.connected:
+            return
+        try:
+            json_data = json.dumps(value).encode('utf-8')
+            
+            # Só comprimir se dados forem grandes o suficiente
+            if len(json_data) > self.compression_threshold:
+                # Comprimir com level 1 (rápido, boa redução)
+                compressed = zlib.compress(json_data, level=self.compression_level)
+                encoded = 'z:' + base64.b64encode(compressed).decode('utf-8')
+                
+                await self.redis.setex(key, ttl, encoded)
+                
+                compression_ratio = len(encoded) / len(json_data)
+                logger.debug(
+                    f"[REDIS] Comprimido {key}: {len(json_data)} -> {len(encoded)} bytes "
+                    f"({compression_ratio:.1%})"
+                )
+            else:
+                # Dados pequenos, não comprimir
+                await self.redis.setex(key, ttl, json_data.decode('utf-8'))
+                
+        except Exception as e:
+            logger.error(f"Erro ao definir valor comprimido {key}: {e}")
 
     async def clear_pattern(self, pattern: str):
         """Deletar todas as chaves que correspondem ao padrão"""

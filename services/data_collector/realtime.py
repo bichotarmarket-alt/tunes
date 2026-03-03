@@ -5,6 +5,7 @@ Serviço de coleta de dados em tempo real para PocketOption
 import asyncio
 import json
 import time
+import uuid
 from collections import deque, defaultdict
 from typing import Optional, List, Dict, Any, Deque, Tuple, Set
 from datetime import datetime
@@ -34,6 +35,7 @@ from schemas import CandleResponse, CandleDataResponse
 from services.trade_timing_manager import TradeTimingManager
 from services.candle_close_tracker import CandleCloseTracker
 from services.user_logger import user_logger
+from services.l1_cache import autotrade_config_l1_cache, user_data_l1_cache, get_with_l1_l2_cache
 
 
 class DataCollectorService:
@@ -72,6 +74,13 @@ class DataCollectorService:
         
         # CandleCloseTracker para rastrear fechamento de velas
         self.candle_close_tracker = CandleCloseTracker()
+        
+        # BatchSignalSaver para salvamento em lote de sinais (eficiência DB)
+        from services.batch_signal_saver import BatchSignalSaver
+        self.batch_signal_saver = BatchSignalSaver(
+            flush_interval=5.0,  # Salvar a cada 5 segundos
+            max_batch_size=50,   # Ou quando atingir 50 sinais
+        )
         
         # Injetar TradeTimingManager no TradeExecutor
         self.trade_executor.trade_timing_manager = self.trade_timing_manager
@@ -168,6 +177,39 @@ class DataCollectorService:
                     return client.user_name
         # Retornar ID truncado como fallback
         return account_id[:8] if account_id else "Unknown"
+
+    async def _save_best_signal_to_db(self, account_id: str, symbol: str, signal: Any, 
+                                     strategy_id: Optional[str], timeframe_seconds: int,
+                                     metrics: Dict[str, Any]) -> bool:
+        """Salvar o melhor sinal no banco de dados usando batch saver"""
+        try:
+            # Usar batch saver em vez de salvar diretamente
+            signal_id = await self.batch_signal_saver.add_signal(
+                account_id=account_id,
+                symbol=symbol,
+                signal=signal,
+                strategy_id=strategy_id,
+                timeframe=timeframe_seconds,
+                metrics=metrics
+            )
+            
+            signal_type_str = signal.signal_type.value if hasattr(signal.signal_type, 'value') else str(signal.signal_type)
+            logger.info(f"[BEST SIGNAL] Sinal adicionado ao batch: {symbol} ({signal_type_str}) | conf={signal.confidence:.2f}")
+            
+            # Registrar sinal no performance monitor
+            try:
+                from services.performance_monitor import performance_monitor
+                executed = metrics.get('is_executed', False)
+                low_confidence = signal.confidence < 0.7
+                performance_monitor.record_signal(executed=executed, low_confidence=low_confidence)
+            except Exception as e:
+                logger.debug(f"[PerformanceMonitor] Erro ao registrar sinal: {e}")
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"[BEST SIGNAL] Erro ao adicionar sinal ao batch: {e}")
+            return False
 
     def set_candle_update_callback(self, callback: callable):
         """Registrar callback para enviar atualizações de candles via WebSocket"""
@@ -369,13 +411,17 @@ class DataCollectorService:
         clear_storage = not self._storage_initialized
         await self.local_storage.start(clear_on_start=clear_storage)
         self._storage_initialized = True  # Marcar como inicializado
-
+        
+        # Iniciar batch signal saver para salvamento eficiente de sinais
+        await self.batch_signal_saver.start()
+        logger.info("[BATCH SAVER] Sistema de salvamento em lote iniciado")
+        
         # Iniciar monitoramento de trades
         await self.trade_executor.start_monitoring()
-
+        
         # Iniciar monitoramento de conexões de usuários (demo e real)
         await self.connection_manager.start_monitoring()
-
+        
         # Iniciar verificador de manutenção do PocketOption
         if settings.POCKETOPTION_MAINTENANCE_CHECK_ENABLED:
             await maintenance_checker.start()
@@ -449,6 +495,10 @@ class DataCollectorService:
         
         # Parar serviço de armazenamento local
         await self.local_storage.stop()
+        
+        # Parar batch signal saver (faz flush final dos sinais pendentes)
+        await self.batch_signal_saver.stop()
+        logger.info("[BATCH SAVER] Sistema de salvamento em lote parado")
         
         # Cancelar tarefa periódica de atualização de assets
         if self._assets_update_task and not self._assets_update_task.done():
@@ -573,8 +623,24 @@ class DataCollectorService:
             return result.scalar_one_or_none()
 
     async def _get_all_autotrade_configs(self) -> Dict[str, List[Dict[str, Any]]]:
-        """Carregar todas as configurações de autotrade ativas (com cache)"""
+        """Carregar todas as configurações de autotrade ativas (com cache L1 + memória)"""
         current_time = time.time()
+        cache_key = "all_autotrade_configs"
+        
+        # Tentar L1 cache primeiro (cachetools - ~100ns)
+        cached_value = await autotrade_config_l1_cache.get(cache_key)
+        if cached_value is not None:
+            # Verificar se o cache em memória também é válido
+            if self._autotrade_configs is not None and (current_time - self._configs_cache_last_updated) < self._configs_cache_duration:
+                # Ceder controle ao event loop para evitar bloqueio
+                await asyncio.sleep(0)
+                return self._autotrade_configs
+            # Se não, usar o valor do L1 cache e atualizar memória
+            self._autotrade_configs = cached_value
+            self._configs_cache_last_updated = current_time
+            # Ceder controle ao event loop para evitar bloqueio
+            await asyncio.sleep(0)
+            return cached_value
 
         # Verificar se o cache foi invalidado (se _configs_cache_last_updated == 0)
         if self._configs_cache_last_updated == 0:
@@ -584,6 +650,8 @@ class DataCollectorService:
 
         # Verificar se o cache ainda é válido
         if self._autotrade_configs is not None and (current_time - self._configs_cache_last_updated) < self._configs_cache_duration:
+            # Ceder controle ao event loop para evitar bloqueio
+            await asyncio.sleep(0)
             return self._autotrade_configs
 
         # Se o cache foi invalidado ou expirou, recarregar do banco
@@ -600,6 +668,7 @@ class DataCollectorService:
                 if not autotrade_rows:
                     self._autotrade_configs = {}
                     self._configs_cache_last_updated = current_time
+                    await autotrade_config_l1_cache.set(cache_key, {})
                     return {}
 
                 # Carregar indicadores de todas as estratégias em batch
@@ -657,6 +726,9 @@ class DataCollectorService:
                 # Atualizar cache
                 self._autotrade_configs = configs
                 self._configs_cache_last_updated = current_time
+                
+                # Salvar no L1 cache
+                await autotrade_config_l1_cache.set(cache_key, configs)
 
                 logger.info(f"[LIST] {len(configs)} configuração(ões) de autotrade carregada(s)")
                 return configs
@@ -671,6 +743,9 @@ class DataCollectorService:
         self._configured_timeframes = None
         self._configured_timeframe = None
         self._config_last_updated = 0
+        # Invalidar L1 cache também
+        import asyncio
+        asyncio.create_task(autotrade_config_l1_cache.delete("all_autotrade_configs"))
         logger.info("[OK] Cache de configurações de autotrade invalidado")
 
     async def _get_configured_timeframe(self) -> Optional[int]:
@@ -698,7 +773,7 @@ class DataCollectorService:
                     text("""
                         SELECT ssid, account_type 
                         FROM monitoring_accounts 
-                        WHERE UPPER(account_type) = 'PAYOUT' AND is_active = 1 
+                        WHERE UPPER(CAST(account_type AS TEXT)) = 'PAYOUT' AND is_active = TRUE 
                         ORDER BY created_at DESC 
                         LIMIT 1
                     """)
@@ -719,7 +794,7 @@ class DataCollectorService:
                     text("""
                         SELECT ssid 
                         FROM monitoring_accounts 
-                        WHERE UPPER(account_type) = 'ATIVOS' AND is_active = 1 
+                        WHERE UPPER(CAST(account_type AS TEXT)) = 'ATIVOS' AND is_active = TRUE 
                         ORDER BY created_at DESC
                     """)
                 )
@@ -811,7 +886,8 @@ class DataCollectorService:
                 if not hasattr(client, '_ws_logger') or client._ws_logger is None:
                     ws_logger = get_connection_logger(
                         connection_logger_id,
-                        connection_type="ativos"
+                        connection_type="ativos",
+                        user_name=getattr(client, 'user_name', f'ATIVOS {idx+1}')
                     )
                     # Anexar logger ao cliente para acesso posterior
                     client._ws_logger = ws_logger
@@ -1204,9 +1280,10 @@ class DataCollectorService:
                     
                     for inactive_symbol in inactive_assets:
                         try:
-                            # Remover do rastreamento
+                            # Remover do rastreamento (verificar se existe primeiro)
                             logger.debug(f"[Rebalance] Removendo ativo inativo {inactive_symbol} do rastreamento")
-                            self._monitored_assets_by_account[account_idx].remove(inactive_symbol)
+                            if inactive_symbol in self._monitored_assets_by_account[account_idx]:
+                                self._monitored_assets_by_account[account_idx].remove(inactive_symbol)
                             all_monitored_symbols.discard(inactive_symbol)
                             
                             # Limpar buffers
@@ -1521,6 +1598,25 @@ class DataCollectorService:
             timeframe_seconds: Timeframe em segundos
         """
         try:
+            # 🚨 VERIFICAÇÃO CRÍTICA: Só emitir sinais se conexão WS estiver ativa
+            # Verificar se pelo menos um cliente ATIVOS está conectado e recebendo ticks
+            has_active_connection = False
+            for account_idx, client in enumerate(self.ativos_clients):
+                if hasattr(client, 'is_connected') and client.is_connected:
+                    # Verificar se está recebendo ticks (health status)
+                    if account_idx in self._client_health_status:
+                        health = self._client_health_status[account_idx]
+                        if health.get('is_connected', False):
+                            has_active_connection = True
+                            break
+            
+            if not has_active_connection:
+                logger.warning(
+                    f"⏸️ [SINAIS] Timeframe {timeframe_seconds}s - Nenhuma conexão WS ativa. "
+                    f"Sinais NÃO serão emitidos até a conexão ser estabelecida."
+                )
+                return
+            
             # Obter timeframes configurados
             configured_timeframes = await self._get_configured_timeframes_cache()
 
@@ -1782,16 +1878,22 @@ class DataCollectorService:
                         }
                     )
                     
-                    # Executar trade usando trade_executor
+                    # Executar trade usando trade_executor em task separada
+                    # para não bloquear o event loop principal (evita lagada no watchdog)
                     try:
-                        trade = await self.trade_executor.execute_trade(
-                            signal=signal,
-                            symbol=symbol,
-                            timeframe_seconds=timeframe_seconds,
-                            strategy_name=f"AutoTrade-{self._get_account_name_by_id(account_id)}",
-                            account_id=account_id,
-                            autotrade_config=config
+                        trade_task = asyncio.create_task(
+                            self.trade_executor.execute_trade(
+                                signal=signal,
+                                symbol=symbol,
+                                timeframe_seconds=timeframe_seconds,
+                                strategy_name=f"AutoTrade-{self._get_account_name_by_id(account_id)}",
+                                account_id=account_id,
+                                autotrade_config=config
+                            )
                         )
+                        
+                        # Aguardar o trade com timeout para não bloquear indefinidamente
+                        trade = await asyncio.wait_for(trade_task, timeout=30.0)
                         
                         if trade:
                             logger.success(
@@ -1951,7 +2053,11 @@ class DataCollectorService:
             collect_only: Se True, apenas coleta sinais sem executar trades
         """
         try:
-            
+            # 🚨 VALIDAÇÃO: Ativos oficiais (sem _otc) só aceitam trades >= 60s
+            from services.pocketoption.constants import is_otc_asset
+            if not is_otc_asset(symbol) and timeframe_seconds < 60:
+                logger.debug(f"⏭️ [{symbol}] Ativo oficial (não-OTC) ignorado: timeframe {timeframe_seconds}s < 60s mínimo")
+                return None
 
             # Carregar todas as configurações de autotrade ativas
             all_configs = await self._get_all_autotrade_configs()
@@ -2017,8 +2123,28 @@ class DataCollectorService:
                             if current_balance <= min_balance:
                                 logger.warning(
                                     f"[WARNING] [{symbol}] {account_name}: "
-                                    f"saldo insuficiente (${current_balance:.2f} <= ${min_balance:.2f}), ignorando"
+                                    f"saldo insuficiente (${current_balance:.2f} <= ${min_balance:.2f}), DESATIVANDO AUTOTRADE"
                                 )
+                                # 🚨 DESATIVAR AUTOTRADE por saldo insuficiente
+                                try:
+                                    from models import AutoTradeConfig
+                                    result_configs = await db.execute(
+                                        select(AutoTradeConfig).where(AutoTradeConfig.account_id == account_id)
+                                    )
+                                    configs_to_disable = result_configs.scalars().all()
+                                    for cfg in configs_to_disable:
+                                        cfg.is_active = False
+                                        cfg.updated_at = datetime.utcnow()
+                                    await db.commit()
+                                    logger.warning(f"🛑 Autotrade DESATIVADO para {account_name} por saldo insuficiente")
+                                    
+                                    # Desconectar WebSocket
+                                    if hasattr(self, 'connection_manager') and self.connection_manager:
+                                        await self.connection_manager.disconnect_connection(account_id, 'demo')
+                                        await self.connection_manager.disconnect_connection(account_id, 'real')
+                                        logger.info(f"✓ Conexões desconectadas para {account_name}")
+                                except Exception as e:
+                                    logger.error(f"Erro ao desativar autotrade por saldo insuficiente: {e}")
                                 continue
 
                             configs_with_sufficient_balance.append(user_config)
@@ -2137,6 +2263,12 @@ class DataCollectorService:
                 # Criar CustomStrategy com indicadores da configuração
                 from services.strategies.custom_strategy import CustomStrategy
                 strategy_params = config.get('strategy_parameters') or {}
+                if isinstance(strategy_params, str):
+                    try:
+                        import json
+                        strategy_params = json.loads(strategy_params)
+                    except:
+                        strategy_params = {}
                 user_name = self._get_account_name_by_id(account_id)
                 strategy_display_name = config.get('strategy_name', f"AutoTrade-{account_id[:8]}")
                 indicators_config = config.get('indicators', [])
@@ -2167,24 +2299,16 @@ class DataCollectorService:
                 # Executar estratégia
                 signal = await strategy.analyze(candle_data_list, symbol)
 
-                # Logar resultado da análise no logger do usuário
-                if signal:
-                    # Log apenas o sinal final (não os detalhes de cada indicador)
-                    total_indicators = len(config.get('indicators') or [])
-                    user_logger.log_final_signal(
-                        username=user_name,
-                        account_id=account_id,
-                        asset=symbol,
-                        strategy_name=strategy_display_name,
-                        direction=signal.signal_type.value if hasattr(signal.signal_type, 'value') else str(signal.signal_type),
-                        confidence=signal.confidence,
-                        confluence_score=getattr(signal, 'confluence', 0),
-                        num_indicators=total_indicators
-                    )
-
                 # Logar resultado da análise
                 if signal:
                     logger.success(f"✅ [{symbol}] SINAL {signal.signal_type.upper()} gerado por {strategy_name} ({timeframe_name}) | confiança={signal.confidence:.2f}")
+                    
+                    # 🔄 ATUALIZAR last_activity da conta (sinal gerado = atividade!)
+                    if hasattr(self, 'connection_manager') and self.connection_manager:
+                        try:
+                            await self.connection_manager.update_last_activity(account_id)
+                        except Exception as e:
+                            logger.debug(f"[{account_id[:8]}...] Erro ao atualizar last_activity: {e}")
 
                     total_indicators = len(config.get('indicators') or [])
                     metrics = self._get_signal_metrics(signal, total_indicators)
@@ -2210,6 +2334,28 @@ class DataCollectorService:
                         logger.info(
                             f"🏆 [{symbol}] Novo melhor sinal para {account_name_best}: {signal.signal_type.upper()} | "
                             f"confluência={metrics['confluence']:.1f}% | conf={signal.confidence:.2f}"
+                        )
+                        
+                        # 💾 SALVAR O MELHOR SINAL NO BANCO DE DADOS
+                        await self._save_best_signal_to_db(
+                            account_id=account_id,
+                            symbol=symbol,
+                            signal=signal,
+                            strategy_id=config.get('strategy_id'),
+                            timeframe_seconds=timeframe_seconds,
+                            metrics=metrics
+                        )
+                        
+                        # 📝 LOGAR APENAS O MELHOR SINAL NO ARQUIVO DO USUÁRIO
+                        user_logger.log_final_signal(
+                            username=account_name_best,
+                            account_id=account_id,
+                            asset=symbol,
+                            strategy_name=strategy_display_name,
+                            direction=signal.signal_type.value if hasattr(signal.signal_type, 'value') else str(signal.signal_type),
+                            confidence=signal.confidence,
+                            confluence_score=getattr(signal, 'confluence', 0),
+                            num_indicators=total_indicators
                         )
                 else:
                     logger.debug(f" [{symbol}] Nenhum sinal gerado por {strategy_name}")
@@ -2284,6 +2430,12 @@ class DataCollectorService:
                             if configured_timeframes and timeframe_seconds in configured_timeframes:
                                 logger.info(f"🎯 Timeframe configurado: {timeframe_seconds}s - Coletando sinais...")
                                 await self._collect_all_signals_and_execute_best(timeframe_seconds)
+                                
+                                # 🎯 EXECUTAR TRADES PENDENTES NO FECHAMENTO DA VELA
+                                for symbol in symbols:
+                                    await self._execute_pending_trades_on_candle_close(
+                                        symbol, timeframe_seconds, float(close_time_str)
+                                    )
                             else:
                                 logger.debug(f"⏭️ Timeframe {timeframe_seconds}s não configurado, ignorando")
 
@@ -3121,7 +3273,12 @@ class DataCollectorService:
 
                 except Exception as e:
                     logger.error(f"Falha ao atualizar payouts em lote: {e}")
-                    await db.rollback()
+                    # Try rollback only if session is still active
+                    try:
+                        if db.is_active:
+                            await db.rollback()
+                    except Exception:
+                        pass  # Ignore rollback errors if connection is closed
                     raise
         
         await _do_update()

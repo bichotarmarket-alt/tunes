@@ -16,11 +16,15 @@ import aiofiles
 class LocalStorageService:
     """Serviço para salvar dados de mercado em arquivos locais"""
 
-    def __init__(self, base_path: str = "data/actives"):
+    def __init__(self, base_path: str = "data/actives", max_ticks_per_file: int = 10000):
         self.base_path = Path(base_path)
         self._running = False
         # Locks para evitar race condition por arquivo
         self._file_locks: Dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+        # Limite máximo de ticks por arquivo para evitar crescimento excessivo
+        self._max_ticks_per_file = max_ticks_per_file
+        # Contador de escritas por arquivo para verificação periódica de truncagem
+        self._write_counters: Dict[str, int] = {}
 
     async def start(self, clear_on_start: bool = True):
         """Iniciar serviço de armazenamento local
@@ -37,7 +41,7 @@ class LocalStorageService:
         # Criar pasta se não existir
         self.base_path.mkdir(parents=True, exist_ok=True)
         
-        logger.info(f"[OK] Local Storage iniciado em {self.base_path} (clear_on_start={clear_on_start})")
+        logger.info(f"[OK] Local Storage iniciado em {self.base_path} (clear_on_start={clear_on_start}, max_ticks={self._max_ticks_per_file})")
 
     async def stop(self):
         """Parar serviço"""
@@ -48,10 +52,14 @@ class LocalStorageService:
         """Limpar pasta actives ao iniciar"""
         if self.base_path.exists():
             try:
+                # Usar loop.run_in_executor para operações síncronas de arquivo
+                loop = asyncio.get_event_loop()
+                
                 # Tentar deletar cada arquivo individualmente para evitar erros de arquivos em uso
-                for file_path in self.base_path.glob("*.txt"):
+                files = await loop.run_in_executor(None, lambda: list(self.base_path.glob("*.txt")))
+                for file_path in files:
                     try:
-                        file_path.unlink()
+                        await loop.run_in_executor(None, file_path.unlink)
                     except Exception as e:
                         # Ignorar arquivos que não podem ser deletados (provavelmente em uso)
                         pass
@@ -60,8 +68,12 @@ class LocalStorageService:
             except Exception as e:
                 logger.warning(f"Aviso: Não foi possível limpar pasta {self.base_path}: {e}")
         
-        # Recriar pasta
-        self.base_path.mkdir(parents=True, exist_ok=True)
+        # Criar pasta de forma assíncrona
+        try:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, self.base_path.mkdir, exist_ok=True)
+        except Exception as e:
+            logger.warning(f"Aviso ao criar pasta: {e}")
 
     async def save_tick(self, asset_symbol: str, price: float, timestamp: float):
         """Salvar tick direto no disco"""
@@ -88,82 +100,150 @@ class LocalStorageService:
         await self._append_to_file_batch(asset_symbol, tick_data_list)
 
     async def _append_to_file(self, asset_symbol: str, tick_data: Dict):
-        """Adicionar tick direto ao arquivo com lock"""
-        # Obter lock para este arquivo específico
+        """Adicionar tick direto ao arquivo usando append mode - MUITO MAIS RÁPIDO"""
         lock = self._file_locks[asset_symbol]
         
         async with lock:
             try:
-                # Caminho: data/actives/{asset}.txt
                 file_path = self.base_path / f"{asset_symbol}.txt"
                 
-                # Ler arquivo existente se houver
-                existing_data = []
-                if file_path.exists():
-                    async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
-                        content = await f.read()
-                        if content:
-                            try:
-                                existing_data = json.loads(content)
-                            except json.JSONDecodeError as e:
-                                logger.warning(f"Arquivo JSON corrompido para {asset_symbol}, criando novo: {e}")
-                                existing_data = []
+                # Usar append mode ('a') em vez de reescrever tudo!
+                # Formato: Line-delimited JSON (JSONL) - uma linha por tick, sem indentação
+                line = json.dumps(tick_data, separators=(',', ':'))
                 
-                # Adicionar novo tick
-                existing_data.append(tick_data)
+                async with aiofiles.open(file_path, "a", encoding="utf-8") as f:
+                    await f.write(line + "\n")
                 
-                # Salvar
-                async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
-                    await f.write(json.dumps(existing_data, indent=2))
+                # Verificar se precisa truncar periodicamente (a cada 100 escritas)
+                self._write_counters[asset_symbol] = self._write_counters.get(asset_symbol, 0) + 1
+                if self._write_counters[asset_symbol] % 100 == 0:
+                    await self._truncate_if_needed(asset_symbol, file_path)
                 
             except Exception as e:
                 logger.error(f"Erro ao salvar tick para {asset_symbol}: {e}")
 
     async def _append_to_file_batch(self, asset_symbol: str, tick_data_list: List[Dict]):
-        """Adicionar múltiplos ticks ao arquivo de uma vez, evitando duplicação"""
-        # Obter lock para este arquivo específico
+        """Adicionar múltiplos ticks em batch usando append mode - MUITO MAIS RÁPIDO"""
+        if not tick_data_list:
+            return
+            
         lock = self._file_locks[asset_symbol]
         
         async with lock:
             try:
-                # Caminho: data/actives/{asset}.txt
                 file_path = self.base_path / f"{asset_symbol}.txt"
                 
-                # Ler arquivo existente se houver
-                existing_data = []
+                # Verificar último timestamp apenas se arquivo existir (leitura parcial)
                 last_timestamp = 0
-                
                 if file_path.exists():
-                    async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
-                        content = await f.read()
-                        if content:
-                            try:
-                                existing_data = json.loads(content)
-                                # Obter o último timestamp para evitar duplicação
-                                if existing_data and len(existing_data) > 0:
-                                    last_timestamp = existing_data[-1].get("timestamp", 0)
-                            except json.JSONDecodeError as e:
-                                logger.warning(f"Arquivo JSON corrompido para {asset_symbol}, criando novo: {e}")
-                                existing_data = []
+                    try:
+                        async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+                            await f.seek(0, 2)  # SEEK_END
+                            file_size = await f.tell()
+                            if file_size > 0:
+                                # Ler últimos 1KB para encontrar última linha
+                                read_size = min(1024, file_size)
+                                await f.seek(file_size - read_size)
+                                last_chunk = await f.read()
+                                lines = last_chunk.strip().split('\n')
+                                if lines:
+                                    last_line = lines[-1]
+                                    try:
+                                        last_tick = json.loads(last_line)
+                                        last_timestamp = last_tick.get("timestamp", 0)
+                                    except:
+                                        pass
+                    except Exception:
+                        pass
                 
-                # Filtrar novos dados: apenas ticks com timestamp maior que o último existente
-                # Isso evita duplicação e lacunas
+                # Filtrar apenas ticks novos
                 new_ticks = [tick for tick in tick_data_list if tick["timestamp"] > last_timestamp]
                 
-                # Se houver novos ticks, adicionar ao arquivo
                 if new_ticks:
-                    existing_data.extend(new_ticks)
+                    # Escrever todas as linhas de uma vez usando append mode
+                    lines = [json.dumps(tick, separators=(',', ':')) for tick in new_ticks]
+                    content = "\n".join(lines) + "\n"
                     
-                    # Salvar
-                    async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
-                        await f.write(json.dumps(existing_data, indent=2))
+                    async with aiofiles.open(file_path, "a", encoding="utf-8") as f:
+                        await f.write(content)
                     
-                    logger.info(f"[OK] [{asset_symbol}] Adicionados {len(new_ticks)} novos ticks (último timestamp: {new_ticks[-1]['timestamp']})")
+                    # Verificar truncagem periodicamente
+                    self._write_counters[asset_symbol] = self._write_counters.get(asset_symbol, 0) + len(new_ticks)
+                    if self._write_counters[asset_symbol] % 100 == 0:
+                        await self._truncate_if_needed(asset_symbol, file_path)
+                    
+                    logger.debug(f"[OK] [{asset_symbol}] Adicionados {len(new_ticks)} ticks via append")
                 else:
-                    logger.debug(f"[SKIP] [{asset_symbol}] Nenhum tick novo para adicionar (último timestamp: {last_timestamp})")
+                    logger.debug(f"[SKIP] [{asset_symbol}] Nenhum tick novo")
                 
             except Exception as e:
                 logger.error(f"Erro ao salvar ticks em lote para {asset_symbol}: {e}")
+
+    async def _truncate_if_needed(self, asset_symbol: str, file_path: Path):
+        """Truncar arquivo se exceder limite de ticks"""
+        try:
+            if not file_path.exists():
+                return
+            
+            # Obter tamanho do arquivo de forma assíncrona via aiofiles
+            # Usar loop.run_in_executor para evitar bloqueio
+            loop = asyncio.get_event_loop()
+            file_size = await loop.run_in_executor(None, file_path.stat)
+            file_size = file_size.st_size
+            
+            if file_size < self._max_ticks_per_file * 50:  # Estimativa: ~50 bytes por linha
+                return
+            
+            line_count = 0
+            async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+                async for _ in f:
+                    line_count += 1
+                    if line_count > self._max_ticks_per_file:
+                        break
+            
+            if line_count > self._max_ticks_per_file:
+                # Manter apenas últimos N ticks
+                lines_to_keep = []
+                async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+                    all_lines = await f.readlines()
+                    lines_to_keep = all_lines[-self._max_ticks_per_file:]
+                
+                # Reescrever com dados truncados
+                async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
+                    await f.writelines(lines_to_keep)
+                
+                logger.info(f"[TRUNCATE] [{asset_symbol}] Arquivo truncado para {len(lines_to_keep)} ticks")
+                
+        except Exception as e:
+            logger.warning(f"Erro ao verificar/truncar arquivo {asset_symbol}: {e}")
+
+    async def _load_ticks_optimized(self, asset_symbol: str, limit: int = 1000) -> List[Dict[str, Any]]:
+        """Carregar ticks do arquivo de forma otimizada (linha por linha)"""
+        file_path = self.base_path / f"{asset_symbol}.txt"
+        
+        if not file_path.exists():
+            return []
+        
+        try:
+            ticks = []
+            async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+                async for line in f:
+                    line = line.strip()
+                    if line:
+                        try:
+                            tick = json.loads(line)
+                            ticks.append(tick)
+                        except json.JSONDecodeError:
+                            continue
+            
+            # Retornar apenas os últimos N ticks se limit especificado
+            if limit and len(ticks) > limit:
+                return ticks[-limit:]
+            return ticks
+                
+        except Exception as e:
+            logger.error(f"Erro ao carregar ticks para {asset_symbol}: {e}")
+            return []
 
     def get_asset_path(self, asset_symbol: str) -> Path:
         """Obter caminho do ativo"""
@@ -174,43 +254,16 @@ class LocalStorageService:
         if not self.base_path.exists():
             return []
         
-        return [d.name for d in self.base_path.iterdir() if d.is_dir()]
+        return [f.stem for f in self.base_path.glob("*.txt") if f.is_file()]
 
     async def load_candles_from_file(self, asset_symbol: str, timeframe: int, limit: int = 100) -> List[Dict[str, Any]]:
-        """Carregar candles do arquivo local e converter para formato OHLC
+        """Carregar candles do arquivo local e converter para formato OHLC (otimizado)"""
+        ticks = await self._load_ticks_optimized(asset_symbol, limit=limit * 10)
         
-        Args:
-            asset_symbol: Símbolo do ativo
-            timeframe: Timeframe em segundos
-            limit: Número máximo de candles a retornar
-            
-        Returns:
-            Lista de candles no formato OHLC
-        """
-        file_path = self.base_path / f"{asset_symbol}.txt"
-        
-        if not file_path.exists():
+        if not ticks:
             return []
         
-        try:
-            async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
-                content = await f.read()
-                if not content:
-                    return []
-                
-                ticks = json.loads(content)
-                
-                if not ticks:
-                    return []
-                
-                # Converter ticks em candles OHLC para o timeframe especificado
-                candles = self._convert_ticks_to_ohlc(ticks, timeframe, limit)
-                
-                return candles
-                
-        except Exception as e:
-            logger.error(f"Erro ao carregar candles para {asset_symbol}: {e}")
-            return []
+        return self._convert_ticks_to_ohlc(ticks, timeframe, limit)
     
     def _convert_ticks_to_ohlc(self, ticks: List[Dict], timeframe: int, limit: int) -> List[Dict[str, Any]]:
         """Converter ticks em candles OHLC para um timeframe específico
@@ -293,37 +346,39 @@ class LocalStorageService:
         return candles
     
     async def get_latest_tick(self, symbol: str) -> Optional[Dict[str, Any]]:
-        """Obter o tick mais recente para um símbolo
-        
-        Args:
-            symbol: Símbolo do ativo
-            
-        Returns:
-            Dicionário com timestamp e price, ou None se não houver dados
-        """
+        """Obter o tick mais recente para um símbolo (otimizado - lê apenas última linha)"""
         file_path = self.base_path / f"{symbol}.txt"
         
         if not file_path.exists():
             return None
         
         try:
+            # Ler apenas a última linha do arquivo (MUITO mais rápido!)
             async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
-                content = await f.read()
-                if not content:
+                await f.seek(0, 2)  # SEEK_END
+                file_size = await f.tell()
+                
+                if file_size == 0:
                     return None
                 
-                ticks = json.loads(content)
+                # Ler últimos 1KB para encontrar última linha
+                read_size = min(1024, file_size)
+                await f.seek(file_size - read_size)
+                last_chunk = await f.read()
                 
-                if not ticks:
-                    return None
+                lines = last_chunk.strip().split('\n')
+                if lines:
+                    last_line = lines[-1]
+                    try:
+                        tick = json.loads(last_line)
+                        return {
+                            "price": tick["price"],
+                            "timestamp": tick["timestamp"]
+                        }
+                    except json.JSONDecodeError:
+                        return None
                 
-                # Retornar o tick mais recente
-                latest_tick = max(ticks, key=lambda x: x["timestamp"])
-                
-                return {
-                    "price": latest_tick["price"],
-                    "timestamp": latest_tick["timestamp"]
-                }
+                return None
                 
         except Exception as e:
             logger.error(f"Erro ao carregar tick mais recente para {symbol}: {e}")

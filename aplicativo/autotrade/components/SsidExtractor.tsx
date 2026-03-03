@@ -109,17 +109,21 @@ export default function SsidExtractor({ environment, title }: SsidExtractorProps
     }
   };
 
-  // ============ GOOGLE OAUTH HANDLER - BROWSER EXTERNO ============
+  // ============ GOOGLE OAUTH HANDLER - PERMITIR DENTRO DO WEBVIEW ============
   const isGoogleOAuthUrl = (url: string): boolean => {
-    const googleDomains = [
+    const googlePatterns = [
       'accounts.google.com',
-      'accounts.youtube.com',
+      'accounts.youtube.com', 
       'accounts.google.co',
       'google.com/signin',
       'google.com/o/oauth2',
+      'google.com/oauth',
       'oauth.google.com',
+      'googleusercontent.com',
+      'gstatic.com',
+      'googleapis.com',
     ];
-    return googleDomains.some(domain => url.includes(domain));
+    return googlePatterns.some(pattern => url.toLowerCase().includes(pattern.toLowerCase()));
   };
 
   const handleOpenExternalBrowser = async (url: string) => {
@@ -145,18 +149,13 @@ export default function SsidExtractor({ environment, title }: SsidExtractorProps
   };
 
   const handleNavigationStateChange = (navState: any) => {
-    const { url, navigationType } = navState;
+    const { url, navigationType, loading } = navState;
     
-    // Detectar URLs de login Google OAuth
+    // Apenas logar URLs do Google, mas permitir carregar no WebView
     if (isGoogleOAuthUrl(url)) {
-      addLog(`🔐 URL Google detectada: ${url.substring(0, 50)}...`);
-      
-      // Abrir em browser externo
-      handleOpenExternalBrowser(url);
-      
-      // Voltar para a página anterior no WebView
-      webViewRef.current?.goBack();
-      return false;
+      addLog(`🔐 URL Google detectada: ${url.substring(0, 60)}...`);
+      addLog('🔐 Permitindo login dentro do app...');
+      // NÃO bloquear - deixar o WebView carregar a página do Google
     }
     
     return true;
@@ -269,18 +268,52 @@ export default function SsidExtractor({ environment, title }: SsidExtractorProps
 
                 // Extrair session do objeto auth
                 if (eventData && typeof eventData === 'object') {
-                  const session = eventData.session;
-                  const isDemo = eventData.isDemo;
-                  const uid = eventData.uid;
+                  // Tentar campo 'session' primeiro (formato completo PHP)
+                  let session = eventData.session;
+                  let isDemo = eventData.isDemo;
+                  let uid = eventData.uid;
+                  
+                  // Se não tiver session, tentar sessionToken (formato alternativo)
+                  if (!session && eventData.sessionToken) {
+                    session = eventData.sessionToken;
+                    isDemo = 0; // Real account
+                    uid = eventData.uid || '';
+                    console.log('[SSID Extractor] Usando sessionToken como session');
+                  }
 
                   if (session && typeof session === 'string') {
-                    console.log('[SSID Extractor] Session encontrada:', session.substring(0, 30) + '...');
-                    window.ReactNativeWebView.postMessage(JSON.stringify({
-                      type: 'SSID_FOUND',
-                      ssid: session,
-                      isDemo: isDemo,
-                      uid: uid
-                    }));
+                    // Verificar se é formato PHP serialized completo
+                    if (session.startsWith('a:4:')) {
+                      // Já é o formato completo, usar diretamente
+                      const fullSsid = rawData;
+                      console.log('[SSID Extractor] Session PHP completa encontrada:', session.substring(0, 30) + '...');
+                      window.ReactNativeWebView.postMessage(JSON.stringify({
+                        type: 'SSID_FOUND',
+                        ssid: fullSsid,
+                        isDemo: isDemo,
+                        uid: uid
+                      }));
+                    } else {
+                      // É apenas um token simples, construir formato completo
+                      console.log('[SSID Extractor] Session token simples, construindo formato completo');
+                      // Construir o formato esperado pelo backend
+                      const constructedSsid = JSON.stringify({
+                        session: session,
+                        isDemo: isDemo === 1 || isDemo === true ? 1 : 0,
+                        uid: uid,
+                        platform: 2,
+                        isFastHistory: true,
+                        isOptimized: true
+                      });
+                      const fullSsid = '42["auth",' + constructedSsid + ']';
+                      console.log('[SSID Extractor] SSID construído:', fullSsid.substring(0, 60) + '...');
+                      window.ReactNativeWebView.postMessage(JSON.stringify({
+                        type: 'SSID_FOUND',
+                        ssid: fullSsid,
+                        isDemo: isDemo,
+                        uid: uid
+                      }));
+                    }
                     return;
                   }
                 }
@@ -619,15 +652,65 @@ export default function SsidExtractor({ environment, title }: SsidExtractorProps
         addLog(data.message);
         setSsidStatus(data.message);
       } else if (data.type === 'SSID_FOUND' && data.ssid) {
-        const ssid = data.ssid.trim();
-        if (ssid.length > 10) {
-          console.log('[SsidExtractor] SSID encontrado!:', ssid.substring(0, 20));
-          addLog('✓ SSID encontrado!');
-          setSsidStatus('SSID encontrado: ' + ssid.substring(0, 15) + '...');
+        let ssid = data.ssid.trim();
+        
+        // Verificar se é formato PHP serialized completo (o ideal)
+        const isPhpSerialized = ssid.includes('a:4:') && ssid.includes('session_id');
+        
+        if (isPhpSerialized) {
+          // Formato PHP completo - usar diretamente (melhor formato)
+          console.log('[SsidExtractor] Formato PHP serialized completo detectado - usando diretamente');
+          addLog('✓ SSID em formato PHP completo encontrado!');
           
           if (!extractedSsid) {
             setExtractedSsid(ssid);
+            console.log('[SsidExtractor] SSID PHP salvo:', ssid.substring(0, 60) + '...');
           }
+          return;
+        }
+        
+        // Verificar se é formato com sessionToken (formato alternativo)
+        if (ssid.includes('sessionToken')) {
+          // Só converter se ainda não temos um SSID
+          if (!extractedSsid) {
+            console.log('[SsidExtractor] Detectado formato sessionToken, convertendo...');
+            try {
+              // Extrair o JSON do formato 42["auth",{...}]
+              const match = ssid.match(/42\["auth",(.+)\]$/);
+              if (match) {
+                const authData = JSON.parse(match[1]);
+                if (authData.sessionToken) {
+                  // Reconstruir com formato session
+                  const converted = {
+                    session: authData.sessionToken,
+                    isDemo: 0,  // Real account
+                    uid: authData.uid || '',
+                    platform: 2,
+                    isFastHistory: true,
+                    isOptimized: true
+                  };
+                  ssid = '42["auth",' + JSON.stringify(converted) + ']';
+                  console.log('[SsidExtractor] SSID convertido:', ssid.substring(0, 60) + '...');
+                  addLog('✓ SSID convertido (sessionToken)');
+                  
+                  setExtractedSsid(ssid);
+                }
+              }
+            } catch (e) {
+              console.error('[SsidExtractor] Erro ao converter sessionToken:', e);
+            }
+          } else {
+            console.log('[SsidExtractor] Ignorando sessionToken - já temos SSID PHP completo');
+          }
+          return;
+        }
+        
+        // Outros formatos - usar se não tiver nada ainda
+        if (ssid.length > 10 && !extractedSsid) {
+          console.log('[SsidExtractor] SSID processado!:', ssid.substring(0, 20));
+          addLog('✓ SSID encontrado!');
+          setSsidStatus('SSID encontrado: ' + ssid.substring(0, 15) + '...');
+          setExtractedSsid(ssid);
         }
       } else if (data.type === 'RESET_COMPLETE') {
         addLog('✓ Reset completo recebido do WebView');
@@ -670,24 +753,79 @@ export default function SsidExtractor({ environment, title }: SsidExtractorProps
   };
 
   const handleConfirmReset = () => {
-    addLog('⚠️ Iniciando reset do navegador...');
+    addLog('⚠️ Iniciando reset completo do navegador...');
     
-    // Navegar para URL de logout primeiro
+    // Limpar estado do SSID encontrado para fechar a tela de sucesso
+    setExtractedSsid('');
+    setExistingSsid(null);
+    setShouldSkipInjection(false);
+    
+    // Limpar logs
+    setLogs([]);
+    
     if (webViewRef.current) {
+      // Injetar JavaScript para limpar todos os dados do navegador
+      const clearDataScript = `
+        (function() {
+          // Limpar todos os cookies
+          document.cookie.split(";").forEach(function(cookie) {
+            const [name] = cookie.split("=");
+            document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/;domain=" + window.location.hostname;
+            document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/;";
+          });
+          
+          // Limpar localStorage
+          localStorage.clear();
+          
+          // Limpar sessionStorage
+          sessionStorage.clear();
+          
+          // Limpar indexedDB
+          if (window.indexedDB) {
+            indexedDB.databases().then(function(dbs) {
+              dbs.forEach(function(db) {
+                indexedDB.deleteDatabase(db.name);
+              });
+            });
+          }
+          
+          // Limpar cache
+          if ('caches' in window) {
+            caches.keys().then(function(names) {
+              names.forEach(function(name) {
+                caches.delete(name);
+              });
+            });
+          }
+          
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'RESET_COMPLETE',
+            message: 'Dados limpos'
+          }));
+        })();
+      `;
+      
+      webViewRef.current.injectJavaScript(clearDataScript);
+      addLog('✓ Comando de limpeza enviado ao WebView');
+      
+      // Navegar para logout primeiro
       const logoutUrl = getLogoutUrl();
       const targetUrl = getNavigationUrl();
       
       addLog(`⏳ Navegando para logout: ${logoutUrl}`);
       
       // Primeiro navegar para logout
-      webViewRef.current?.injectJavaScript(`window.location.href = '${logoutUrl}';`);
+      webViewRef.current.injectJavaScript(`window.location.href = '${logoutUrl}';`);
       
-      // Aguardar 3 segundos e navegar para URL alvo
+      // Aguardar 3 segundos e navegar para URL alvo (com dados limpos)
       setTimeout(() => {
         setIsReloading(true);
-        addLog(`⏳ Navegando para URL alvo: ${targetUrl}`);
+        addLog(`⏳ Navegando para URL limpa: ${targetUrl}`);
         webViewRef.current?.injectJavaScript(`window.location.href = '${targetUrl}';`);
-        setTimeout(() => setIsReloading(false), 3000);
+        setTimeout(() => {
+          setIsReloading(false);
+          addLog('✓ Reset completo - navegador limpo');
+        }, 3000);
       }, 3000);
     } else {
       addLog('✗ WebView não disponível para reset');
@@ -830,10 +968,19 @@ export default function SsidExtractor({ environment, title }: SsidExtractorProps
               ref={webViewRef}
               source={{ uri: environment === 'demo' ? 'https://pocketoption.com/pt/cabinet/demo-quick-high-low/' : 'https://pocketoption.com/pt/cabinet/quick-high-low/USD/' }}
               style={styles.webview}
+              userAgent="Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
               injectedJavaScriptBeforeContentLoaded={shouldSkipInjection ? '' : injectedJavaScript}
               injectedJavaScript={shouldSkipInjection ? '' : injectedJavaScript}
               onMessage={handleWebViewMessage}
               onNavigationStateChange={handleNavigationStateChange}
+              onShouldStartLoadWithRequest={(request) => {
+                const url = request.url;
+                // Apenas logar URLs do Google, permitir carregar no WebView
+                if (isGoogleOAuthUrl(url)) {
+                  addLog(`🔐 URL Google: ${url.substring(0, 50)}...`);
+                }
+                return true; // Sempre permitir carregar
+              }}
               javaScriptEnabled={true}
               domStorageEnabled={true}
               startInLoadingState={true}

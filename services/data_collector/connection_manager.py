@@ -8,7 +8,7 @@ from loguru import logger
 from services.pocketoption.client import AsyncPocketOptionClient
 from core.database import get_db_context
 from models import Account, AutoTradeConfig
-from sqlalchemy import select, text, and_, or_, exists
+from sqlalchemy import select, text, and_, or_, exists, update
 from utils.retry import retry_on_db_lock
 
 
@@ -47,7 +47,8 @@ class UserConnection:
                     ssid=self.ssid,
                     is_demo=self.is_demo,
                     persistent_connection=True,  # Usar conexão persistente para manter ativa
-                    user_name=self.user_name
+                    user_name=self.user_name,
+                    account_id=self.account_id  # Passar account_id para verificação de autotrade
                 )
                 # Registrar handlers de balance antes da conexão para não perder eventos iniciais
                 self.client.add_event_callback("balance_updated", self._on_balance_updated)
@@ -159,7 +160,7 @@ class UserConnection:
                     text("""
                         UPDATE autotrade_configs 
                         SET is_active = 0, 
-                            updated_at = datetime('now')
+                            updated_at = NOW()
                         WHERE account_id = :account_id
                     """),
                     {"account_id": self.account_id}
@@ -216,8 +217,8 @@ Por favor, adicione saldo à sua conta para continuar usando o AutoTrade."""
                 if user_data and user_data[0]:
                     chat_id = user_data[0]
                     await telegram_service_v2.send_message(
+                        message=message,
                         chat_id=chat_id,
-                        text=message,
                         priority=1  # Alta prioridade
                     )
                     logger.info(
@@ -350,51 +351,75 @@ Por favor, adicione saldo à sua conta para continuar usando o AutoTrade."""
                 # Atualizar no banco de dados
                 async with get_db_context() as db:
                     await db.execute(
-                        text(f"UPDATE accounts SET {column} = :balance, updated_at = datetime('now') WHERE id = :account_id"),
+                        text(f"UPDATE accounts SET {column} = :balance, updated_at = NOW() WHERE id = :account_id"),
                         {"balance": balance_value, "account_id": self.account_id}
                     )
 
-                    # Atualizar highest_balance nas configs ativas desta conta
-                    from models import AutoTradeConfig
-                    from sqlalchemy import select
-
+                    # 🔄 BATCH UPDATE: Atualizar highest_balance de todas as configs em 3 operações
+                    # 1. Inicializar initial_balance onde é NULL
                     result = await db.execute(
-                        select(AutoTradeConfig).where(
-                            AutoTradeConfig.account_id == self.account_id,
-                            AutoTradeConfig.is_active == True
-                        )
+                        text("""
+                            UPDATE autotrade_configs 
+                            SET initial_balance = :balance, updated_at = NOW()
+                            WHERE account_id = :account_id 
+                              AND is_active = TRUE 
+                              AND initial_balance IS NULL
+                            RETURNING id
+                        """),
+                        {"balance": balance_value, "account_id": self.account_id}
                     )
-                    configs = result.scalars().all()
+                    initialized_initial = result.fetchall()
+                    if initialized_initial:
+                        logger.info(
+                            f"{self._get_log_prefix()} [{self.account_id}] 💰 {len(initialized_initial)} initial_balance(s) inicializado(s): ${balance_value:.2f}",
+                            extra={
+                                "user_name": self.user_name,
+                                "account_id": self.account_id[:8] if self.account_id else "",
+                                "account_type": self.connection_type
+                            }
+                        )
 
-                    for config in configs:
-                        # Inicializar initial_balance se ainda não foi definido (primeira vez que a estratégia é ligada)
-                        if config.initial_balance is None:
-                            config.initial_balance = balance_value
+                    # 2. Inicializar highest_balance onde é NULL
+                    result = await db.execute(
+                        text("""
+                            UPDATE autotrade_configs 
+                            SET highest_balance = :balance, updated_at = NOW()
+                            WHERE account_id = :account_id 
+                              AND is_active = TRUE 
+                              AND highest_balance IS NULL
+                            RETURNING id
+                        """),
+                        {"balance": balance_value, "account_id": self.account_id}
+                    )
+                    initialized_highest = result.fetchall()
+                    if initialized_highest:
+                        logger.info(
+                            f"{self._get_log_prefix()} [{self.account_id}] 💰 {len(initialized_highest)} highest_balance(s) inicializado(s): ${balance_value:.2f}",
+                            extra={
+                                "user_name": self.user_name,
+                                "account_id": self.account_id[:8] if self.account_id else "",
+                                "account_type": self.connection_type
+                            }
+                        )
+
+                    # 3. Atualizar highest_balance onde o novo valor é maior
+                    result = await db.execute(
+                        text("""
+                            UPDATE autotrade_configs 
+                            SET highest_balance = :balance, updated_at = NOW()
+                            WHERE account_id = :account_id 
+                              AND is_active = TRUE 
+                              AND highest_balance IS NOT NULL
+                              AND highest_balance < :balance
+                            RETURNING id, highest_balance as old_highest
+                        """),
+                        {"balance": balance_value, "account_id": self.account_id}
+                    )
+                    updated = result.fetchall()
+                    if updated:
+                        for row in updated:
                             logger.info(
-                                f"{self._get_log_prefix()} [{self.account_id}] 💰 initial_balance inicializado: ${balance_value:.2f} para config {config.id}",
-                                extra={
-                                    "user_name": self.user_name,
-                                    "account_id": self.account_id[:8] if self.account_id else "",
-                                    "account_type": self.connection_type
-                                }
-                            )
-                        # Inicializar highest_balance se ainda não foi definido
-                        if config.highest_balance is None:
-                            config.highest_balance = balance_value
-                            logger.info(
-                                f"{self._get_log_prefix()} [{self.account_id}] 💰 highest_balance inicializado: ${balance_value:.2f} para config {config.id}",
-                                extra={
-                                    "user_name": self.user_name,
-                                    "account_id": self.account_id[:8] if self.account_id else "",
-                                    "account_type": self.connection_type
-                                }
-                            )
-                        # Atualizar highest_balance se o saldo atual for maior
-                        elif balance_value > config.highest_balance:
-                            old_highest = config.highest_balance
-                            config.highest_balance = balance_value
-                            logger.info(
-                                f"{self._get_log_prefix()} [{self.account_id}] 📈 highest_balance atualizado: ${old_highest:.2f} → ${balance_value:.2f}",
+                                f"{self._get_log_prefix()} [{self.account_id}] 📈 highest_balance atualizado: ${row[1]:.2f} → ${balance_value:.2f}",
                                 extra={
                                     "user_name": self.user_name,
                                     "account_id": self.account_id[:8] if self.account_id else "",
@@ -498,67 +523,155 @@ Por favor, adicione saldo à sua conta para continuar usando o AutoTrade."""
                 )
                 async with get_db_context() as db:
                     result = await db.execute(
-                        text(f"UPDATE accounts SET {column} = :balance, updated_at = datetime('now') WHERE id = :account_id"),
+                        text(f"UPDATE accounts SET {column} = :balance, updated_at = NOW() WHERE id = :account_id"),
                         {"balance": balance_value, "account_id": self.account_id}
                     )
 
-                    # Atualizar highest_balance nas configs ativas desta conta
-                    from models import AutoTradeConfig
-                    from sqlalchemy import select
-
-                    configs_result = await db.execute(
-                        select(AutoTradeConfig).where(
-                            AutoTradeConfig.account_id == self.account_id,
-                            AutoTradeConfig.is_active == True
-                        )
+                    # 🔄 BATCH UPDATE: Atualizar highest_balance de todas as configs em 3 operações
+                    # 1. Inicializar initial_balance onde é NULL
+                    await db.execute(
+                        text("""
+                            UPDATE autotrade_configs 
+                            SET initial_balance = :balance, updated_at = NOW()
+                            WHERE account_id = :account_id 
+                              AND is_active = TRUE 
+                              AND initial_balance IS NULL
+                        """),
+                        {"balance": balance_value, "account_id": self.account_id}
                     )
-                    configs = configs_result.scalars().all()
 
-                    for config in configs:
-                        # Inicializar initial_balance se ainda não foi definido (primeira vez que a estratégia é ligada)
-                        if config.initial_balance is None:
-                            config.initial_balance = balance_value
-                            logger.info(
-                                f"{self._get_log_prefix()} [{self.account_id}] 💰 initial_balance inicializado: ${balance_value:.2f} para config {config.id}",
-                                extra={
-                                    "user_name": self.user_name,
-                                    "account_id": self.account_id[:8] if self.account_id else "",
-                                    "account_type": self.connection_type
-                                }
-                            )
-                        # Inicializar highest_balance se ainda não foi definido
-                        if config.highest_balance is None:
-                            config.highest_balance = balance_value
-                            logger.info(
-                                f"{self._get_log_prefix()} [{self.account_id}] 💰 highest_balance inicializado: ${balance_value:.2f} para config {config.id}",
-                                extra={
-                                    "user_name": self.user_name,
-                                    "account_id": self.account_id[:8] if self.account_id else "",
-                                    "account_type": self.connection_type
-                                }
-                            )
-                        # Atualizar highest_balance se o saldo atual for maior
-                        elif balance_value > config.highest_balance:
-                            old_highest = config.highest_balance
-                            config.highest_balance = balance_value
-                            logger.info(
-                                f"{self._get_log_prefix()} [{self.account_id}] 📈 highest_balance atualizado: ${old_highest:.2f} → ${balance_value:.2f}",
-                                extra={
-                                    "user_name": self.user_name,
-                                    "account_id": self.account_id[:8] if self.account_id else "",
-                                    "account_type": self.connection_type
-                                }
-                            )
+                    # 2. Inicializar highest_balance onde é NULL
+                    await db.execute(
+                        text("""
+                            UPDATE autotrade_configs 
+                            SET highest_balance = :balance, updated_at = NOW()
+                            WHERE account_id = :account_id 
+                              AND is_active = TRUE 
+                              AND highest_balance IS NULL
+                        """),
+                        {"balance": balance_value, "account_id": self.account_id}
+                    )
+
+                    # 3. Atualizar highest_balance onde o novo valor é maior
+                    await db.execute(
+                        text("""
+                            UPDATE autotrade_configs 
+                            SET highest_balance = :balance, updated_at = NOW()
+                            WHERE account_id = :account_id 
+                              AND is_active = TRUE 
+                              AND highest_balance IS NOT NULL
+                              AND highest_balance < :balance
+                        """),
+                        {"balance": balance_value, "account_id": self.account_id}
+                    )
 
                     await db.commit()
-                    logger.info(
-                        f"{self._get_log_prefix()} [{self.account_id}] *** Resultado UPDATE: {result.rowcount} linhas afetadas",
-                        extra={
-                            "user_name": self.user_name,
-                            "account_id": self.account_id[:8] if self.account_id else "",
-                            "account_type": self.connection_type
-                        }
+                    
+                    # 🚨 VERIFICAR SALDO MÍNIMO E DESATIVAR AUTOTRADE SE NECESSÁRIO
+                    # Buscar configs ativas para verificar saldo mínimo (apenas ID e amount)
+                    configs_result = await db.execute(
+                        text("""
+                            SELECT id, amount FROM autotrade_configs
+                            WHERE account_id = :account_id AND is_active = TRUE
+                        """),
+                        {"account_id": self.account_id}
                     )
+                    configs = configs_result.fetchall()
+                    
+                    # O saldo mínimo é baseado no maior valor de operação das configs ativas
+                    min_balance = max((row[1] for row in configs), default=10.0)
+                    if balance_value <= min_balance and configs:
+                        logger.warning(
+                            f"{self._get_log_prefix()} [{self.account_id}] ⚠️ SALDO INSUFICIENTE: ${balance_value:.2f} <= ${min_balance:.2f} - DESATIVANDO AUTOTRADE",
+                            extra={
+                                "user_name": self.user_name,
+                                "account_id": self.account_id[:8] if self.account_id else "",
+                                "account_type": self.connection_type
+                            }
+                        )
+                        
+                        # 🔄 BATCH UPDATE: Desativar todas as configs ativas de uma vez
+                        await db.execute(
+                            text("""
+                                UPDATE autotrade_configs 
+                                SET is_active = FALSE, updated_at = NOW()
+                                WHERE account_id = :account_id AND is_active = TRUE
+                            """),
+                            {"account_id": self.account_id}
+                        )
+                        await db.commit()
+                        logger.error(
+                            f"{self._get_log_prefix()} [{self.account_id}] 🛑 AUTOTRADE DESATIVADO por saldo insuficiente",
+                            extra={
+                                "user_name": self.user_name,
+                                "account_id": self.account_id[:8] if self.account_id else "",
+                                "account_type": self.connection_type
+                            }
+                        )
+                        
+                        # Notificar usuário via Telegram
+                        try:
+                            from services.notifications.telegram import TelegramNotificationService
+                            telegram_service = TelegramNotificationService()
+                            
+                            # Buscar chat_id do usuário via JOIN (mais eficiente que subquery)
+                            result = await db.execute(
+                                text("""
+                                    SELECT u.telegram_chat_id 
+                                    FROM users u 
+                                    JOIN accounts a ON u.id = a.user_id 
+                                    WHERE a.id = :account_id
+                                """),
+                                {"account_id": self.account_id}
+                            )
+                            user_data = result.fetchone()
+                            chat_id = user_data[0] if user_data else None
+                            
+                            if chat_id:
+                                await telegram_service.send_message(
+                                    message=f"⚠️ *SALDO INSUFICIENTE PARA OPERAÇÃO*\n\n"
+                                           f"Olá {self.user_name}!\n\n"
+                                           f"Seu saldo atual é **${balance_value:.2f}**, que está abaixo do valor de operação configurado (**${min_balance:.2f}**).\n\n"
+                                           f"Seu autotrade foi **DESATIVADO** automaticamente para evitar tentativas de operação sem saldo suficiente.\n\n"
+                                           f"💡 *Dica:* O saldo mínimo deve ser maior que o valor de operação definido nas suas configurações.\n\n"
+                                           f"Por favor, recarregue sua conta ou ajuste o valor de operação para reativar o autotrade.",
+                                    chat_id=chat_id,
+                                    user_name=self.user_name,
+                                    account_id=self.account_id,
+                                    account_type=self.connection_type
+                                )
+                                logger.info(
+                                    f"{self._get_log_prefix()} [{self.account_id}] Notificação Telegram enviada para {chat_id}",
+                                    extra={
+                                        "user_name": self.user_name,
+                                        "account_id": self.account_id[:8] if self.account_id else "",
+                                        "account_type": self.connection_type
+                                    }
+                                )
+                            else:
+                                logger.warning(
+                                    f"{self._get_log_prefix()} [{self.account_id}] Chat ID do Telegram não encontrado para enviar notificação",
+                                    extra={
+                                        "user_name": self.user_name,
+                                        "account_id": self.account_id[:8] if self.account_id else "",
+                                        "account_type": self.connection_type
+                                    }
+                                )
+                        except Exception as e:
+                            logger.warning(f"{self._get_log_prefix()} [{self.account_id}] Erro ao enviar notificação Telegram: {e}")
+                        
+                        # 🚨 DESCONECTAR WebSocket imediatamente para evitar reconexão
+                        await self.disconnect()
+                        logger.info(
+                            f"{self._get_log_prefix()} [{self.account_id}] 🔌 Conexão WebSocket FECHADA por saldo insuficiente",
+                            extra={
+                                "user_name": self.user_name,
+                                "account_id": self.account_id[:8] if self.account_id else "",
+                                "account_type": self.connection_type
+                            }
+                        )
+                        # Retornar imediatamente para evitar processamento adicional
+                        return
 
                 logger.info(
                     f"{self._get_log_prefix()} [{self.account_id}] *** Saldo {column} atualizado (balance_data): {balance_value}",
@@ -640,6 +753,19 @@ class UserConnectionManager:
             "account_id": "",
             "account_type": ""
         })
+    
+    async def update_last_activity(self, account_id: str):
+        """Atualizar last_activity_timestamp quando há atividade na conta"""
+        try:
+            async with get_db_context() as db:
+                await db.execute(
+                    text("UPDATE accounts SET last_activity_timestamp = NOW() WHERE id = :account_id"),
+                    {"account_id": account_id}
+                )
+                await db.commit()
+                logger.debug(f"[{account_id[:8]}...] last_activity atualizado")
+        except Exception as e:
+            logger.error(f"[{account_id[:8]}...] Erro ao atualizar last_activity: {e}")
     
     async def _monitor_loop(self):
         """Loop de monitoramento para conectar/desconectar dinamicamente"""
@@ -785,35 +911,83 @@ class UserConnectionManager:
         from sqlalchemy import text
 
         async with get_db_context() as db:
-            # Buscar configurações de autotrade da conta
-            result = await db.execute(
+            # 🔄 OTIMIZAÇÃO: Dividir query complexa em queries simples
+            # Query 1: Dados básicos da conta (já temos via objeto account, mas precisamos dos SSIDs atualizados)
+            account_result = await db.execute(
                 text("""
-                    SELECT
-                        MAX(ac.is_active) as any_active,
-                        COUNT(ac.id) as configs_count,
-                        MAX(a.autotrade_demo) as autotrade_demo,
-                        MAX(a.autotrade_real) as autotrade_real,
-                        MAX(a.ssid_demo) as ssid_demo,
-                        MAX(a.ssid_real) as ssid_real,
-                        MAX(ac.last_activity_timestamp) as last_activity_timestamp,
-                        u.name as user_name
-                    FROM accounts a
-                    LEFT JOIN autotrade_configs ac ON a.id = ac.account_id
-                    LEFT JOIN users u ON a.user_id = u.id
-                    WHERE a.id = :account_id
-                    GROUP BY a.id, a.autotrade_demo, a.autotrade_real, a.ssid_demo, a.ssid_real, u.name
+                    SELECT ssid_demo, ssid_real, autotrade_demo, autotrade_real, 
+                           last_activity_timestamp, user_id
+                    FROM accounts 
+                    WHERE id = :account_id
                 """),
                 {"account_id": account.id}
             )
-            row = result.fetchone()
-
-            if not row or len(row) < 8:
-                logger.debug(f"Conta {account.id[:8]}...: Nenhuma configuração encontrada")
+            account_row = account_result.fetchone()
+            if not account_row:
+                logger.debug(f"Conta {account.id[:8]}...: Não encontrada")
                 return
-
-            any_active, configs_count, autotrade_demo, autotrade_real, ssid_demo, ssid_real, last_activity_timestamp, user_name = row
+            
+            ssid_demo, ssid_real, autotrade_demo, autotrade_real, account_last_activity, user_id = account_row
+            
+            # Query 2: Nome do usuário (JOIN simples)
+            user_result = await db.execute(
+                text("SELECT name FROM users WHERE id = :user_id"),
+                {"user_id": user_id}
+            )
+            user_row = user_result.fetchone()
+            user_name = user_row[0] if user_row else None
+            
+            # Query 3: Configs ativas - count e max last_activity (sem JOINs complexos)
+            configs_result = await db.execute(
+                text("""
+                    SELECT 
+                        COUNT(*) as configs_count,
+                        BOOL_OR(is_active) as any_active,
+                        MAX(last_activity_timestamp) as config_last_activity
+                    FROM autotrade_configs 
+                    WHERE account_id = :account_id
+                """),
+                {"account_id": account.id}
+            )
+            configs_row = configs_result.fetchone()
+            configs_count, any_active, config_last_activity = configs_row if configs_row else (0, False, None)
+            
             is_active = bool(any_active)
             has_configs = bool(configs_count and configs_count > 0)
+            
+            # Usar o timestamp mais recente entre autotrade_configs e accounts
+            # Priorizar o mais recente, pois o accounts.last_activity_timestamp é resetado quando inativo
+            last_activity_timestamp = None
+            
+            # Converter ambos para datetime se forem strings
+            config_dt = None
+            account_dt = None
+            
+            if config_last_activity:
+                if isinstance(config_last_activity, str):
+                    try:
+                        config_dt = datetime.fromisoformat(config_last_activity.replace('Z', '+00:00'))
+                    except (ValueError, TypeError):
+                        pass
+                else:
+                    config_dt = config_last_activity
+            
+            if account_last_activity:
+                if isinstance(account_last_activity, str):
+                    try:
+                        account_dt = datetime.fromisoformat(account_last_activity.replace('Z', '+00:00'))
+                    except (ValueError, TypeError):
+                        pass
+                else:
+                    account_dt = account_last_activity
+            
+            # Usar o mais recente dos dois
+            if config_dt and account_dt:
+                last_activity_timestamp = config_dt if config_dt > account_dt else account_dt
+            elif config_dt:
+                last_activity_timestamp = config_dt
+            elif account_dt:
+                last_activity_timestamp = account_dt
 
             logger.debug(
                 f"Conta {account.id[:8]}...: has_configs={has_configs}, is_active={is_active}, "
@@ -897,13 +1071,45 @@ class UserConnectionManager:
                 if time_inactive > inactivity_threshold:
                     logger.info(
                         f"[{account.id[:8]}...] Conta inativa por {time_inactive.total_seconds()/60:.1f} "
-                        "minutos, desconectando websocket (autotrade permanece ativo)",
+                        "minutos, desconectando websocket e desativando autotrade",
                         extra={
                             "user_name": user_name,
                             "account_id": account.id[:8] if account.id else "",
                             "account_type": ""
                         }
                     )
+                    
+                    # 🔄 BATCH UPDATE: Desativar autotrade E resetar last_activity em uma única transação
+                    try:
+                        await db.execute(
+                            update(AutoTradeConfig)
+                            .where(AutoTradeConfig.account_id == account.id)
+                            .values(is_active=False, updated_at=now)
+                        )
+                        await db.execute(
+                            text("UPDATE accounts SET last_activity_timestamp = NOW() WHERE id = :account_id"),
+                            {"account_id": account.id}
+                        )
+                        # Commit único para ambas as operações
+                        await db.commit()
+                        logger.info(
+                            f"[{account.id[:8]}...] Autotrade desativado e last_activity resetado (batch update)",
+                            extra={
+                                "user_name": user_name,
+                                "account_id": account.id[:8] if account.id else "",
+                                "account_type": ""
+                            }
+                        )
+                    except Exception as e:
+                        logger.error(
+                            f"[{account.id[:8]}...] Erro no batch update de desativação: {e}",
+                            extra={
+                                "user_name": user_name,
+                                "account_id": account.id[:8] if account.id else "",
+                                "account_type": ""
+                            }
+                        )
+                    
                     # Desconectar todas as conexões desta conta
                     demo_key = self._get_connection_key(account.id, 'demo')
                     real_key = self._get_connection_key(account.id, 'real')
@@ -1003,6 +1209,24 @@ class UserConnectionManager:
                     "account_id": account.id[:8] if account.id else "",
                     "account_type": ""
                 })
+                # Verificar se autotrade está ativo ANTES de forçar reconexão
+                if not is_active:
+                    logger.warning(f"[{account.id[:8]}...] Autotrade INATIVO, pulando reconexão forçada", extra={
+                        "user_name": user_name,
+                        "account_id": account.id[:8] if account.id else "",
+                        "account_type": ""
+                    })
+                    # Desconectar se estiver conectado
+                    demo_key = self._get_connection_key(account.id, 'demo')
+                    real_key = self._get_connection_key(account.id, 'real')
+                    if demo_key in self.connections:
+                        await self.connections[demo_key].disconnect()
+                        del self.connections[demo_key]
+                    if real_key in self.connections:
+                        await self.connections[real_key].disconnect()
+                        del self.connections[real_key]
+                    return
+                
                 # Se autotrade_configs.is_active estiver ativo, forçar conexão demo
                 if is_active and ssid_demo:
                     logger.info(f"[{account.id[:8]}...] Forçando conexão demo para usuário...", extra={

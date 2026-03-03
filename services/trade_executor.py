@@ -420,6 +420,8 @@ class TradeExecutor:
                     )
                     if attempt < max_retries - 1:
                         await asyncio.sleep(retry_delay)
+                        # YIELD: Permitir que o event loop processe outras tarefas
+                        await asyncio.sleep(0)
                         continue
                     else:
                         # Última tentativa falhou, marcar como fechado sem resultado
@@ -599,17 +601,22 @@ class TradeExecutor:
                     if user_chat_id and notification_key not in self._sent_notifications:
                         try:
                             logger.info(f"[NOTIFICATION] Enviando notificação de resultado para {user_name} (chat: {user_chat_id})")
-                            await telegram_service.send_trade_result_notification(
-                                asset=asset_name,
-                                direction=self._map_direction_to_signal(trade.direction.value),
-                                result=trade.status.value,
-                                profit=profit,
-                                account_name=account_name,
-                                chat_id=user_chat_id,
-                                account_type=getattr(trade, "connection_type", None),
-                                user_name=user_name,
-                                balance_before=balance_before,
-                                balance_after=balance_after
+                            # YIELD: Cedendo controle ao event loop antes de enviar notificação
+                            await asyncio.sleep(0)
+                            # Executar notificação em task separada para não bloquear
+                            asyncio.create_task(
+                                telegram_service.send_trade_result_notification(
+                                    asset=asset_name,
+                                    direction=self._map_direction_to_signal(trade.direction.value),
+                                    result=trade.status.value,
+                                    profit=profit,
+                                    account_name=account_name,
+                                    chat_id=user_chat_id,
+                                    account_type=getattr(trade, "connection_type", None),
+                                    user_name=user_name,
+                                    balance_before=balance_before,
+                                    balance_after=balance_after
+                                )
                             )
                             self._sent_notifications.add(notification_key)
                             logger.success(f"[NOTIFICATION] Notificação enviada com sucesso: {notification_key}")
@@ -711,17 +718,22 @@ class TradeExecutor:
                     notification_key = f"{trade.id}_{trade.status.value}"
                     if user_chat_id and notification_key not in self._sent_notifications:
                         try:
-                            await telegram_service.send_trade_result_notification(
-                                asset=asset_name,
-                                direction=self._map_direction_to_signal(trade.direction.value),
-                                result=trade.status.value,
-                                profit=0,
-                                account_name=account_name,
-                                chat_id=user_chat_id,
-                                account_type=getattr(trade, "connection_type", None),
-                                user_name=user_name,
-                                balance_before=None,
-                                balance_after=None
+                            # YIELD: Cedendo controle ao event loop antes de enviar notificação
+                            await asyncio.sleep(0)
+                            # Executar notificação em task separada para não bloquear
+                            asyncio.create_task(
+                                telegram_service.send_trade_result_notification(
+                                    asset=asset_name,
+                                    direction=self._map_direction_to_signal(trade.direction.value),
+                                    result=trade.status.value,
+                                    profit=0,
+                                    account_name=account_name,
+                                    chat_id=user_chat_id,
+                                    account_type=getattr(trade, "connection_type", None),
+                                    user_name=user_name,
+                                    balance_before=None,
+                                    balance_after=None
+                                )
                             )
                             self._sent_notifications.add(notification_key)
                             logger.debug(f"[NOTIFICATION] Notificação de cancelamento enviada e rastreada: {notification_key}")
@@ -743,6 +755,8 @@ class TradeExecutor:
                             }
                         )
                         await asyncio.sleep(retry_delay)
+                        # YIELD: Permitir que o event loop processe outras tarefas
+                        await asyncio.sleep(0)
                         continue
                     else:
                         # Última tentativa, marcar como CLOSED
@@ -799,17 +813,22 @@ class TradeExecutor:
                         notification_key = f"{trade.id}_{trade.status.value}"
                         if user_chat_id and notification_key not in self._sent_notifications:
                             try:
-                                await telegram_service.send_trade_result_notification(
-                                    asset=asset_name,
-                                    direction=self._map_direction_to_signal(trade.direction.value),
-                                    result=trade.status.value,
-                                    profit=trade.profit if trade.profit else 0,
-                                    account_name=account_name,
-                                    chat_id=user_chat_id,
-                                    account_type=getattr(trade, "connection_type", None),
-                                    user_name=user_name,
-                                    balance_before=None,
-                                    balance_after=None
+                                # YIELD: Cedendo controle ao event loop antes de enviar notificação
+                                await asyncio.sleep(0)
+                                # Executar notificação em task separada para não bloquear
+                                asyncio.create_task(
+                                    telegram_service.send_trade_result_notification(
+                                        asset=asset_name,
+                                        direction=self._map_direction_to_signal(trade.direction.value),
+                                        result=trade.status.value,
+                                        profit=trade.profit if trade.profit else 0,
+                                        account_name=account_name,
+                                        chat_id=user_chat_id,
+                                        account_type=getattr(trade, "connection_type", None),
+                                        user_name=user_name,
+                                        balance_before=None,
+                                        balance_after=None
+                                    )
                                 )
                                 self._sent_notifications.add(notification_key)
                                 logger.debug(f"[NOTIFICATION] Notificação de fechamento enviada e rastreada: {notification_key}")
@@ -827,6 +846,8 @@ class TradeExecutor:
                 })
                 if attempt < max_retries - 1:
                     await asyncio.sleep(retry_delay)
+                    # YIELD: Permitir que o event loop processe outras tarefas
+                    await asyncio.sleep(0)
                     continue
                 else:
                     # Última tentativa falhou, marcar como fechado sem resultado
@@ -868,6 +889,12 @@ class TradeExecutor:
         """
         try:
             logger.success(f"🎯 [TradeExecutor] Iniciando execução de trade | {symbol} | {strategy_name} | {timeframe_seconds}s | {signal.signal_type.upper()} | confiança={signal.confidence:.2f}")
+            
+            # 🚨 VALIDAÇÃO DE SEGURANÇA: Ativos oficiais (sem _otc) só aceitam trades >= 60s
+            from services.pocketoption.constants import is_otc_asset
+            if not is_otc_asset(symbol) and timeframe_seconds < 60:
+                logger.warning(f"⏸️ [TradeExecutor] [{symbol}] Trade bloqueado: ativo oficial (não-OTC) requer timeframe >= 60s (atual: {timeframe_seconds}s)")
+                return None
             
             # Obter asset_id
             asset_id = ASSETS.get(symbol)
@@ -979,6 +1006,11 @@ class TradeExecutor:
             duration = timeframe_seconds
             
             async with account_lock:
+                # 🚨 CRITICAL FIX: Processar trades expirados PENDENTES antes de recarregar config
+                # Isso garante que smart_reduction e outros contadores estejam atualizados
+                # antes de calcular o valor do próximo trade
+                await self._process_pending_expired_trades(account.id)
+                
                 # Recarregar configuração do banco para obter last_trade_time atualizado
                 autotrade_config = await self._get_autotrade_config(account.id)
                 if not autotrade_config:
@@ -1142,6 +1174,13 @@ class TradeExecutor:
                     if trade:
                         logger.success(f"[TradeExecutor] [{account.name}] Trade executado: {trade.direction} ${trade.amount} @ {trade.entry_price}")
                         
+                        # Registrar trade no performance monitor
+                        try:
+                            from services.performance_monitor import performance_monitor
+                            performance_monitor.record_trade(success=True)
+                        except Exception as e:
+                            logger.debug(f"[PerformanceMonitor] Erro ao registrar trade: {e}")
+                        
                         # Enviar notificação de trade executado via Telegram
                         try:
                             # Buscar dados do usuário para notificação
@@ -1164,15 +1203,22 @@ class TradeExecutor:
                                 logger.info(f"[NOTIFICATION] Enviando notificação de trade executado para {user_name_notify} (chat: {user_chat_id})")
                                 # Converter direção do formato do banco (CALL/PUT) para BUY/SELL
                                 direction_mapped = "BUY" if signal.signal_type.value.upper() in ["CALL", "BUY"] else "SELL"
-                                await telegram_service.send_signal_notification(
-                                    asset=symbol,
-                                    direction=direction_mapped,
-                                    confidence=signal.confidence,
-                                    timeframe=duration,
-                                    account_name=account_name_notify,
-                                    chat_id=user_chat_id,
-                                    trade_amount=trade.amount if hasattr(trade, 'amount') else None,
-                                    account_type=getattr(trade, "connection_type", None),
+                                
+                                # YIELD: Cedendo controle ao event loop antes de enviar notificação
+                                await asyncio.sleep(0)
+                                
+                                # Executar notificação em task separada para não bloquear
+                                asyncio.create_task(
+                                    telegram_service.send_signal_notification(
+                                        asset=symbol,
+                                        direction=direction_mapped,
+                                        confidence=signal.confidence,
+                                        timeframe=duration,
+                                        account_name=account_name_notify,
+                                        chat_id=user_chat_id,
+                                        trade_amount=trade.amount if hasattr(trade, 'amount') else None,
+                                        account_type=getattr(trade, "connection_type", None),
+                                    )
                                 )
                                 logger.success(f"[NOTIFICATION] Notificação de trade executado enviada com sucesso")
                             else:
@@ -1359,15 +1405,20 @@ class TradeExecutor:
         """Verificar limites diários de trades"""
         # Resetar contadores se for um novo dia
         today = datetime.utcnow().date()
-        if config.last_trade_date and config.last_trade_date.date() != today:
-            config.daily_trades_count = 0
-            config.soros_level = 0  # Resetar nível do Soros
-            config.soros_amount = 0.0  # Resetar valor do Soros
-            config.martingale_level = 0  # Resetar nível do Martingale
-            config.martingale_amount = 0.0  # Resetar valor do Martingale
-            config.updated_at = datetime.utcnow()  # Atualizar timestamp
+        if config.last_trade_date:
+            # Handle both date and datetime objects
+            last_date = config.last_trade_date
+            if hasattr(last_date, 'date'):
+                last_date = last_date.date()
+            if last_date != today:
+                config.daily_trades_count = 0
+                config.soros_level = 0  # Resetar nível do Soros
+                config.soros_amount = 0.0  # Resetar valor do Soros
+                config.martingale_level = 0  # Resetar nível do Martingale
+                config.martingale_amount = 0.0  # Resetar valor do Martingale
+                config.updated_at = datetime.utcnow()  # Atualizar timestamp
 
-            logger.info(f"📅 Novo dia detectado: contadores resetados")
+                logger.info(f"📅 Novo dia detectado: contadores resetados")
 
         return True
 
@@ -1863,6 +1914,65 @@ class TradeExecutor:
 
         return True
     
+    async def _process_pending_expired_trades(self, account_id: str) -> None:
+        """Processar trades expirados pendentes para garantir estado atualizado dos contadores
+        
+        Esta função é CRÍTICA para evitar race conditions onde um trade é executado
+        antes que o resultado do trade anterior seja processado e commitado.
+        
+        Args:
+            account_id: ID da conta para verificar trades pendentes
+        """
+        try:
+            async with get_db_context() as db:
+                now = datetime.utcnow()
+                # Buscar trades ativos que já expiraram (há pelo menos 1 segundo)
+                # mas ainda não tiveram seu resultado processado
+                query = select(Trade).where(
+                    Trade.account_id == account_id,
+                    Trade.status == TradeStatus.ACTIVE,
+                    Trade.expires_at <= now
+                )
+                result = await db.execute(query)
+                expired_trades = result.scalars().all()
+                
+                if expired_trades:
+                    logger.info(
+                        f"🔄 [TradeExecutor] {len(expired_trades)} trade(s) expirado(s) pendente(s) "
+                        f"para conta {account_id[:8]}... Processando antes de executar novo trade"
+                    )
+                    
+                    for trade in expired_trades:
+                        try:
+                            # Processar resultado do trade expirado
+                            await self._check_trade_result(trade, db)
+                            logger.info(
+                                f"✅ [TradeExecutor] Trade pendente {trade.id[:8]} processado "
+                                f"(status: {trade.status.value})"
+                            )
+                        except Exception as e:
+                            logger.error(
+                                f"❌ [TradeExecutor] Erro ao processar trade pendente {trade.id[:8]}: {e}",
+                                exc_info=True
+                            )
+                            # Continuar processando outros trades mesmo se um falhar
+                            continue
+                    
+                    logger.info(
+                        f"✅ [TradeExecutor] Todos os trades pendentes processados para conta {account_id[:8]}"
+                    )
+                else:
+                    logger.debug(
+                        f"✅ [TradeExecutor] Nenhum trade expirado pendente para conta {account_id[:8]}"
+                    )
+        except Exception as e:
+            # Não bloquear a execução se houver erro ao processar trades pendentes
+            # Apenas logar o erro e continuar
+            logger.error(
+                f"⚠️ [TradeExecutor] Erro ao verificar trades pendentes para conta {account_id[:8]}: {e}",
+                exc_info=True
+            )
+
     async def _check_no_active_trades(self, account_id: str, symbol: Optional[str] = None) -> bool:
         """Verificar se não há trades ativos para garantir funcionamento correto do soros/martingale
         
@@ -2207,57 +2317,61 @@ class TradeExecutor:
                 smart_reduction_active = getattr(config, 'smart_reduction_active', False)
                 smart_reduction_win_restore = getattr(config, 'smart_reduction_win_restore', 2)
                 
-                # Inicializar contador específico se necessário
-                if config.smart_reduction_loss_count is None:
-                    config.smart_reduction_loss_count = 0
-                
-                # Incrementar contador específico de losses
-                config.smart_reduction_loss_count += 1
-                
-                logger.info(f"🔍 [REDUÇÃO INTELIGENTE] Contadores: loss_count={config.smart_reduction_loss_count}/{smart_reduction_loss_trigger}, win_count={config.smart_reduction_win_count}, cascade_level={getattr(config, 'smart_reduction_cascade_level', 0)}, enabled={smart_reduction_enabled}, active={smart_reduction_active}, cascading={getattr(config, 'smart_reduction_cascading', False)}")
-                
-                if smart_reduction_enabled and not smart_reduction_active:
-                    if config.smart_reduction_loss_count >= smart_reduction_loss_trigger:
-                        # Ativar redução - salvar valor base e ativar
-                        if getattr(config, 'smart_reduction_base_amount', 0.0) == 0:
-                            config.smart_reduction_base_amount = config.amount
-                        config.smart_reduction_active = True
-                        # Inicializar nível de cascata (nível 1 = primeira redução)
-                        config.smart_reduction_cascade_level = 1
-                        # Resetar contador de losses ao entrar no reduce (evita acúmulo infinito)
+                # Só incrementar contador de losses se Redução Inteligente estiver habilitada
+                if smart_reduction_enabled:
+                    # Inicializar contador específico se necessário
+                    if config.smart_reduction_loss_count is None:
                         config.smart_reduction_loss_count = 0
-                        # Resetar contador de wins para restauração
-                        config.smart_reduction_win_count = 0
-                        logger.warning(f"🚨 Redução Inteligente ATIVADA (nível cascata=1) após atingir trigger. Loss count resetado. Redução de {smart_reduction_percentage}% aplicada.")
-                    else:
-                        logger.info(f"⏳ Redução Inteligente: {config.smart_reduction_loss_count}/{smart_reduction_loss_trigger} losses. Ainda não atingiu trigger.")
-                elif smart_reduction_active:
-                    # Se já está ativa e teve loss
-                    smart_reduction_cascading = getattr(config, 'smart_reduction_cascading', False)
                     
-                    if smart_reduction_cascading and config.smart_reduction_loss_count >= smart_reduction_loss_trigger:
-                        # CASCATA: Já está em redução, atingiu trigger de novo → aumentar nível
-                        config.smart_reduction_cascade_level += 1
-                        # Resetar contadores para próxima sequência
-                        config.smart_reduction_loss_count = 0
-                        config.smart_reduction_win_count = 0
-                        
-                        # Calcular novo valor reduzido
-                        reduction_factor = (100 - smart_reduction_percentage) / 100
-                        new_reduced_amount = config.amount * (reduction_factor ** config.smart_reduction_cascade_level)
-                        
-                        # FLOOR: Garantir mínimo de $1
-                        MIN_TRADE_AMOUNT = 1.0
-                        if new_reduced_amount < MIN_TRADE_AMOUNT:
-                            new_reduced_amount = MIN_TRADE_AMOUNT
-                            logger.warning(f"⚠️ Redução Cascata limitada ao mínimo de ${MIN_TRADE_AMOUNT}")
-                        
-                        logger.warning(f"🚨🚨 REDUÇÃO CASCATA ATIVADA! Nível {config.smart_reduction_cascade_level}. "
-                                     f"Novo valor: ${new_reduced_amount:.2f} (redução {smart_reduction_percentage}% sobre valor já reduzido)")
+                    # Incrementar contador específico de losses
+                    config.smart_reduction_loss_count += 1
+                    
+                    logger.info(f"🔍 [REDUÇÃO INTELIGENTE] Contadores: loss_count={config.smart_reduction_loss_count}/{smart_reduction_loss_trigger}, win_count={config.smart_reduction_win_count}, cascade_level={getattr(config, 'smart_reduction_cascade_level', 0)}, enabled={smart_reduction_enabled}, active={smart_reduction_active}, cascading={getattr(config, 'smart_reduction_cascading', False)}")
+                    
+                    if not smart_reduction_active:
+                        if config.smart_reduction_loss_count >= smart_reduction_loss_trigger:
+                            # Ativar redução - salvar valor base e ativar
+                            if getattr(config, 'smart_reduction_base_amount', 0.0) == 0:
+                                config.smart_reduction_base_amount = config.amount
+                            config.smart_reduction_active = True
+                            # Inicializar nível de cascata (nível 1 = primeira redução)
+                            config.smart_reduction_cascade_level = 1
+                            # NÃO resetar contador de losses aqui - queremos ver o total acumulado
+                            # Resetar contador de wins para restauração
+                            config.smart_reduction_win_count = 0
+                            logger.warning(f"🚨 Redução Inteligente ATIVADA (nível cascata=1) após {config.smart_reduction_loss_count} losses. Redução de {smart_reduction_percentage}% aplicada.")
+                        else:
+                            logger.info(f"⏳ Redução Inteligente: {config.smart_reduction_loss_count}/{smart_reduction_loss_trigger} losses. Ainda não atingiu trigger.")
                     else:
-                        # Sem cascata ou não atingiu trigger: apenas resetar contadores de wins
-                        config.smart_reduction_win_count = 0
-                        logger.info(f"📉 Redução Inteligente ATIVA. Perda registrada - win_count resetado. Aguardando {smart_reduction_win_restore} wins consecutivos para restaurar.")
+                        # Se já está ativa e teve loss
+                        smart_reduction_cascading = getattr(config, 'smart_reduction_cascading', False)
+                        
+                        if smart_reduction_cascading and config.smart_reduction_loss_count >= smart_reduction_loss_trigger:
+                            # CASCATA: Já está em redução, atingiu trigger de novo → aumentar nível
+                            config.smart_reduction_cascade_level += 1
+                            # NÃO resetar contador de losses - manter acumulado para visibilidade
+                            # Resetar apenas contador de wins para restauração
+                            config.smart_reduction_win_count = 0
+                            
+                            # Calcular novo valor reduzido
+                            reduction_factor = (100 - smart_reduction_percentage) / 100
+                            new_reduced_amount = config.amount * (reduction_factor ** config.smart_reduction_cascade_level)
+                            
+                            # FLOOR: Garantir mínimo de $1
+                            MIN_TRADE_AMOUNT = 1.0
+                            if new_reduced_amount < MIN_TRADE_AMOUNT:
+                                new_reduced_amount = MIN_TRADE_AMOUNT
+                                logger.warning(f"⚠️ Redução Cascata limitada ao mínimo de ${MIN_TRADE_AMOUNT}")
+                            
+                            logger.warning(f"🚨🚨 REDUÇÃO CASCATA ATIVADA! Nível {config.smart_reduction_cascade_level} após {config.smart_reduction_loss_count} losses. "
+                                         f"Novo valor: ${new_reduced_amount:.2f} (redução {smart_reduction_percentage}% sobre valor já reduzido)")
+                        else:
+                            # Sem cascata ou não atingiu trigger: apenas resetar contadores de wins
+                            config.smart_reduction_win_count = 0
+                            logger.info(f"📉 Redução Inteligente ATIVA. Perda registrada - win_count resetado. Aguardando {smart_reduction_win_restore} wins consecutivos para restaurar.")
+                else:
+                    # Redução Inteligente desativada - não incrementar contadores
+                    logger.debug(f"🔍 [REDUÇÃO INTELIGENTE] Desativada - contadores não alterados")
 
                 # Martingale: Incrementar nível após perda (apenas se configurado)
                 if config.martingale > 0:
@@ -2486,7 +2600,19 @@ class TradeExecutor:
                     if indicators.get('ml_pattern_id') is not None:
                         indicators['ml_pattern_id'] = str(indicators['ml_pattern_id'])
 
-                logger.info(f"Salvando trade com indicadores: {indicators}")
+                # YIELD: Cedendo controle ao event loop antes de operações pesadas
+                await asyncio.sleep(0)
+                
+                # Log resumido dos indicadores (evitar bloqueio com dados enormes)
+                indicator_summary = []
+                if isinstance(indicators, list):
+                    indicator_summary = [f"{i.get('name', i.get('type', 'unknown'))}:{i.get('signal', '?')}" for i in indicators[:5]]
+                    logger.info(f"Salvando trade com {len(indicators)} indicadores: {', '.join(indicator_summary)}{'...' if len(indicators) > 5 else ''}")
+                elif isinstance(indicators, dict):
+                    keys = list(indicators.keys())[:5]
+                    logger.info(f"Salvando trade com indicadores dict: {', '.join(keys)}{'...' if len(indicators) > 5 else ''}")
+                else:
+                    logger.info(f"Salvando trade com indicadores (tipo: {type(indicators)})")
                 
                 # Log do order_result para debug
                 logger.info(f"Order result: {order_result}")
@@ -2540,7 +2666,10 @@ class TradeExecutor:
                 db.add(trade)
                 await db.commit()
                 
-                logger.info(f"Trade salvo com ID: {trade.id}, order_id: {trade.order_id}, entry_price: {trade.entry_price}, signal_indicators: {trade.signal_indicators}")
+                # YIELD: Cedendo controle após commit do banco
+                await asyncio.sleep(0)
+                
+                logger.info(f"Trade salvo com ID: {trade.id}, order_id: {trade.order_id}, entry_price: {trade.entry_price}, indicadores: {len(indicators) if isinstance(indicators, list) else 'N/A'}")
 
                 # Atualizar sinal como executado (com tratamento de erro e verificação)
                 if getattr(signal, "id", None):
@@ -2564,6 +2693,13 @@ class TradeExecutor:
                             )
                             await db.commit()
                             logger.info(f"Sinal atualizado como executado: {signal.id} -> trade {trade.id}")
+                            
+                            # Registrar sinal como executado no performance monitor
+                            try:
+                                from services.performance_monitor import performance_monitor
+                                performance_monitor.record_signal(executed=True)
+                            except Exception:
+                                pass
                         else:
                             logger.warning(f"Trade {trade.id} não encontrado no banco, sinal não atualizado")
                     except Exception as signal_err:
@@ -2577,12 +2713,17 @@ class TradeExecutor:
                 if config:
                     # Resetar contadores se for um novo dia
                     today = datetime.utcnow().date()
-                    if config.last_trade_date and config.last_trade_date.date() != today:
-                        config.daily_trades_count = 0
-                        config.soros_level = 0
-                        config.soros_amount = 0.0
-                        config.martingale_level = 0
-                        config.martingale_amount = 0.0
+                    if config.last_trade_date:
+                        # Handle both date and datetime objects
+                        last_date = config.last_trade_date
+                        if hasattr(last_date, 'date'):
+                            last_date = last_date.date()
+                        if last_date != today:
+                            config.daily_trades_count = 0
+                            config.soros_level = 0
+                            config.soros_amount = 0.0
+                            config.martingale_level = 0
+                            config.martingale_amount = 0.0
                         logger.info(f"📅 Novo dia detectado: contadores resetados")
                     
                     # Incrementar contador de trades diários
@@ -2593,6 +2734,9 @@ class TradeExecutor:
                     
                     await db.commit()
                     logger.info(f"Contadores atualizados: trades={config.daily_trades_count}")
+                    
+                    # YIELD: Cedendo controle após atualização de contadores
+                    await asyncio.sleep(0)
                 
                 return trade
                 

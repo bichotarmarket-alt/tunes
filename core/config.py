@@ -1,7 +1,7 @@
 """Configuration settings for the application"""
 from typing import List, Optional
-from pydantic_settings import BaseSettings
-from pydantic import validator, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, field_validator
 from functools import lru_cache
 
 
@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     # JWT
     SECRET_KEY: str = Field(..., env="SECRET_KEY")
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 120  # 2 horas (era 30min)
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     # PocketOption
@@ -66,8 +66,8 @@ class Settings(BaseSettings):
     CELERY_ENABLED: bool = False
 
     # Rate Limiting
-    RATE_LIMIT_PER_MINUTE: int = 100
-    RATE_LIMIT_PER_MINUTE_AUTH: int = 300
+    RATE_LIMIT_PER_MINUTE: int = 200  # Aumentado de 100
+    RATE_LIMIT_PER_MINUTE_AUTH: int = 500  # Aumentado de 300
 
     # CORS - Railway usa domínios dinâmicos *.up.railway.app
     CORS_ORIGINS: str = "*"  # Em produção Railway, permitir todas as origens ou configurar via env
@@ -123,12 +123,14 @@ class Settings(BaseSettings):
     LOG_RETENTION: str = "7 days"
     LOG_FORMAT: str = "{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} | {message}"
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-        extra = "ignore"
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=True,
+        extra="ignore"
+    )
 
-    @validator('SECRET_KEY')
+    @field_validator('SECRET_KEY')
+    @classmethod
     def validate_secret_key(cls, v):
         if len(v) < 32:
             raise ValueError('SECRET_KEY deve ter pelo menos 32 caracteres')
@@ -136,31 +138,36 @@ class Settings(BaseSettings):
             raise ValueError('SECRET_KEY não pode ser o valor padrão')
         return v
 
-    @validator('ENVIRONMENT')
+    @field_validator('ENVIRONMENT')
+    @classmethod
     def validate_environment(cls, v):
         if v not in ["development", "staging", "production"]:
             raise ValueError('ENVIRONMENT deve ser development, staging ou production')
         return v
 
-    @validator('API_PORT')
+    @field_validator('API_PORT')
+    @classmethod
     def validate_port(cls, v):
         if not 1 <= v <= 65535:
             raise ValueError('API_PORT deve estar entre 1 e 65535')
         return v
 
-    @validator('ACCESS_TOKEN_EXPIRE_MINUTES')
+    @field_validator('ACCESS_TOKEN_EXPIRE_MINUTES')
+    @classmethod
     def validate_token_expiry(cls, v):
         if v < 1 or v > 1440:
             raise ValueError('ACCESS_TOKEN_EXPIRE_MINUTES deve estar entre 1 e 1440')
         return v
 
-    @validator('MAX_TRADES_PER_DAY')
+    @field_validator('MAX_TRADES_PER_DAY')
+    @classmethod
     def validate_max_trades(cls, v):
         if v < 1 or v > 1000:
             raise ValueError('MAX_TRADES_PER_DAY deve estar entre 1 e 1000')
         return v
 
-    @validator('MAX_TRADE_AMOUNT')
+    @field_validator('MAX_TRADE_AMOUNT')
+    @classmethod
     def validate_max_amount(cls, v):
         if v < 1 or v > 100000:
             raise ValueError('MAX_TRADE_AMOUNT deve estar entre 1 e 100000')
@@ -173,12 +180,13 @@ class Settings(BaseSettings):
             return f"redis://:{self.REDIS_PASSWORD}@{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
-    @validator('REDIS_ENABLED')
-    def validate_redis_config(cls, v, values):
+    @field_validator('REDIS_ENABLED')
+    @classmethod
+    def validate_redis_config(cls, v, info):
         if v:
             # Validar que host está configurado
-            host = values.get('REDIS_HOST')
-            port = values.get('REDIS_PORT')
+            host = info.data.get('REDIS_HOST')
+            port = info.data.get('REDIS_PORT')
             if not host or not port:
                 raise ValueError('REDIS_HOST e REDIS_PORT são obrigatórios quando REDIS_ENABLED=true')
         return v

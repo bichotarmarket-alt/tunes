@@ -36,6 +36,20 @@ class InMemoryCache(CacheBackend):
         self._cache: dict = {}
         self._ttl: dict = {}
         self._lock = asyncio.Lock()
+        self._total_size_bytes = 0
+    
+    def _estimate_size(self, value: Any) -> int:
+        """Estimar tamanho em bytes de um valor"""
+        try:
+            if isinstance(value, (str, bytes)):
+                return len(value)
+            elif isinstance(value, (int, float, bool)):
+                return 8
+            else:
+                # Estimativa via JSON
+                return len(json.dumps(value))
+        except Exception:
+            return 100  # Valor padrão
     
     async def get(self, key: str) -> Optional[Any]:
         """Get value from cache"""
@@ -47,8 +61,10 @@ class InMemoryCache(CacheBackend):
             if key in self._ttl:
                 import time
                 if time.time() > self._ttl[key]:
-                    self._cache.pop(key, None)
+                    value = self._cache.pop(key, None)
                     self._ttl.pop(key, None)
+                    if value:
+                        self._total_size_bytes -= self._estimate_size(value)
                     return None
 
             return self._cache[key]
@@ -56,7 +72,13 @@ class InMemoryCache(CacheBackend):
     async def set(self, key: str, value: Any, ttl: int = None) -> bool:
         """Set value in cache"""
         async with self._lock:
+            # Remover valor antigo se existir
+            if key in self._cache:
+                old_value = self._cache[key]
+                self._total_size_bytes -= self._estimate_size(old_value)
+            
             self._cache[key] = value
+            self._total_size_bytes += self._estimate_size(value)
 
             if ttl:
                 import time
@@ -67,8 +89,11 @@ class InMemoryCache(CacheBackend):
     async def delete(self, key: str) -> bool:
         """Delete value from cache"""
         async with self._lock:
-            self._cache.pop(key, None)
-            self._ttl.pop(key, None)
+            if key in self._cache:
+                value = self._cache.pop(key, None)
+                self._ttl.pop(key, None)
+                if value:
+                    self._total_size_bytes -= self._estimate_size(value)
             return True
     
     async def exists(self, key: str) -> bool:
@@ -81,7 +106,12 @@ class InMemoryCache(CacheBackend):
         async with self._lock:
             self._cache.clear()
             self._ttl.clear()
+            self._total_size_bytes = 0
             return True
+    
+    def get_memory_mb(self) -> float:
+        """Retornar memória usada em MB"""
+        return self._total_size_bytes / (1024 * 1024)
 
 
 class RedisCache(CacheBackend):
@@ -186,9 +216,24 @@ def get_cache() -> CacheBackend:
 
 
 async def cache_get(key: str) -> Optional[Any]:
-    """Get value from cache"""
+    """Get value from cache with performance tracking"""
     cache = get_cache()
-    return await cache.get(key)
+    result = await cache.get(key)
+    
+    # Registrar cache hit/miss no performance monitor
+    try:
+        from services.performance_monitor import performance_monitor
+        memory_mb = 0.0
+        if isinstance(cache, InMemoryCache):
+            memory_mb = cache.get_memory_mb()
+        if result is not None:
+            performance_monitor.record_cache(hit=True, memory_mb=memory_mb)
+        else:
+            performance_monitor.record_cache(hit=False, memory_mb=memory_mb)
+    except Exception:
+        pass
+    
+    return result
 
 
 async def cache_set(key: str, value: Any, ttl: int = None) -> bool:
@@ -196,7 +241,13 @@ async def cache_set(key: str, value: Any, ttl: int = None) -> bool:
     cache = get_cache()
     if ttl is None:
         ttl = settings.REDIS_CACHE_TTL
-    return await cache.set(key, value, ttl)
+    
+    result = await cache.set(key, value, ttl)
+    
+    # Opcional: registrar cache set (não é hit nem miss, apenas operação)
+    # Mas pode ser útil para debugging
+    
+    return result
 
 
 async def cache_delete(key: str) -> bool:

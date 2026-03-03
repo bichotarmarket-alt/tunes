@@ -1,0 +1,2 @@
+id,date,strategy_id,asset_id,timeframe,total_signals,buy_signals,sell_signals,hold_signals,executed_signals,avg_confidence,avg_confluence,min_confidence,max_confidence,updated_at
+2026-02-27:all:all:0,2026-02-27,all,all,0,0,0,0,0,0,0.0,0.0,0.0,0.0,2026-03-01

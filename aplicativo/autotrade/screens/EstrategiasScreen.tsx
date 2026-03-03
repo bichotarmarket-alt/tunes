@@ -5,6 +5,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiClient } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useConnection } from '../contexts/ConnectionContext';
 import { CustomAlert } from '../components/CustomAlert';
 import { colors } from '../theme';
 import { contentMaxWidth } from '../responsive';
@@ -295,6 +296,18 @@ export default function EstrategiasScreen() {
       fetchAccountMode();
     }, [fetchStrategies, fetchAutotradeConfigs, fetchAccountMode])
   );
+
+  // Recarregar dados quando a conexão é restaurada
+  const { connectionRestoredAt } = useConnection();
+  useEffect(() => {
+    if (connectionRestoredAt) {
+      console.log('[EstrategiasScreen] Conexão restaurada, recarregando dados...');
+      setError(null); // Limpar erro anterior
+      fetchStrategies(true);
+      fetchAutotradeConfigs();
+      fetchAccountMode();
+    }
+  }, [connectionRestoredAt, fetchStrategies, fetchAutotradeConfigs, fetchAccountMode]);
 
   // Polling para atualizar estratégias a cada 2 segundos para resposta imediata
   useEffect(() => {

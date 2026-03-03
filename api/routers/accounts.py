@@ -119,7 +119,7 @@ async def update_my_account(
         # Criar conta automaticamente se não existir
         account = Account(
             user_id=current_user.id,
-            name="Conta Principal",
+            name=f"Conta de {current_user.name}",
             autotrade_demo=True,
             autotrade_real=False,
             uid=0,

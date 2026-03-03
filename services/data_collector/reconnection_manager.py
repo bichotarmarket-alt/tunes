@@ -227,7 +227,12 @@ class ReconnectionManager:
         should_reconnect = config.get('should_reconnect', True)
         if callable(should_reconnect):
             try:
-                should_reconnect = bool(should_reconnect())
+                result = should_reconnect()
+                # Se o resultado for uma coroutine (async), aguardar
+                if asyncio.iscoroutine(result):
+                    should_reconnect = bool(await result)
+                else:
+                    should_reconnect = bool(result)
             except Exception as e:
                 logger.error(
                     f"[CRITICAL] [{connection_type}] {description} - Erro ao avaliar should_reconnect: {e}",

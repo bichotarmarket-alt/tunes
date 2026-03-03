@@ -299,6 +299,13 @@ class StrategyManager:
                 )
                 await db.commit()
                 logger.info(f"Sinal atualizado como executado: {signal.id}")
+                
+                # Registrar sinal como executado no performance monitor
+                try:
+                    from services.performance_monitor import performance_monitor
+                    performance_monitor.record_signal(executed=True)
+                except Exception:
+                    pass
 
             logger.info(f"Trade executed: {symbol} {signal.signal_type} ${strategy.amount}")
 

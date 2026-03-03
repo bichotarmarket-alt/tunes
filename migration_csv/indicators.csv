@@ -1,0 +1,24 @@
+id,name,type,description,parameters,is_active,is_default,version,created_at,updated_at
+c07803cd-9d2a-488f-878b-f1f4392d1af1,RSI Padrão,rsi,Índice de Força Relativa - identifica condições de sobrecompra/sobrevenda,"{""period"": 14, ""overbought"": 70, ""oversold"": 30}",1,1,1.0,2026-02-26 16:50:26.622679,2026-02-26 16:50:26.622679
+b78c6a59-5d07-4cd0-a6d9-62e13d83f003,MACD Padrão,macd,Convergência/Divergência de Médias Móveis - identifica tendências e reversões,"{""fast_period"": 12, ""slow_period"": 26, ""signal_period"": 9}",1,1,1.0,2026-02-26 16:50:26.635732,2026-02-26 16:50:26.635732
+ec9b0228-509c-490b-b3f6-14d56e9402ae,Bollinger Bands,bollinger_bands,Bandas de Bollinger - identifica volatilidade e reversões de preço,"{""period"": 20, ""std_dev"": 2}",1,1,1.0,2026-02-26 16:50:26.636727,2026-02-26 16:50:26.636727
+90f64788-daa7-4d55-86b1-37ccfa6d9d94,SMA 50,sma,Média Móvel Simples de 50 períodos - identifica tendência de longo prazo,"{""period"": 50}",1,1,1.0,2026-02-26 16:50:26.638723,2026-02-26 16:50:26.638723
+2f201651-60d7-4933-b0a7-a381abfb1e30,EMA 20,ema,Média Móvel Exponencial de 20 períodos - identifica tendência de curto prazo,"{""period"": 20}",1,1,1.0,2026-02-26 16:50:26.640327,2026-02-26 16:50:26.640327
+8f1cfe12-046d-4d02-a646-afff93ec7337,Stochastic,stochastic,Oscilador Estocástico - identifica momentum e reversões,"{""k_period"": 14, ""d_period"": 3, ""slowing"": 3, ""overbought"": 80, ""oversold"": 20}",1,1,1.0,2026-02-26 16:50:26.641344,2026-02-26 16:50:26.641344
+abcdaacc-8163-4f7e-9d04-7da40832ad72,ATR,atr,Average True Range - mede volatilidade do mercado,"{""period"": 14}",1,1,1.0,2026-02-26 16:50:26.642377,2026-02-26 16:50:26.642377
+c6eb7b6a-7636-494d-8968-a8ce3d1581c4,Zonas de Suporte/Resistência,zonas,Identifica zonas de suporte e resistência baseadas em máximas e mínimas históricas,"{""swing_period"": 20, ""zone_strength"": 3, ""zone_tolerance"": 0.001, ""min_zone_width"": 0.001, ""atr_multiplier"": 1.0}",1,1,1.0,2026-02-26 16:50:26.642377,2026-02-26 16:50:26.642377
+4b283271-d73a-4d8a-8c5c-60ecf656aa17,Parabolic SAR,parabolic_sar,Parabolic Stop and Reverse - trend reversal indicator,"{""initial_af"": 0.02, ""max_af"": 0.2, ""step_af"": 0.02}",,1,,,
+818365dc-335a-4cbf-9e2b-b7533a43eade,Ichimoku Cloud,ichimoku_cloud,Ichimoku Kinko Hyo - comprehensive trend indicator,"{""tenkan_period"": 9, ""kijun_period"": 26, ""senkou_span_b_period"": 52, ""chikou_shift"": 26}",,1,,,
+7256ba5a-003a-48dd-ba07-d8ea71874d1b,Money Flow Index,money_flow_index,MFI - momentum indicator with volume,"{""period"": 14}",,1,,,
+93652a62-3803-43b9-89d3-ca74cbdf5543,ADX,average_directional_index,Average Directional Index - trend strength indicator,"{""period"": 14}",,1,,,
+717361e1-0bc7-44b0-ba5a-c033622c62e0,Keltner Channels,keltner_channels,Keltner Channels - volatility bands,"{""ema_period"": 20, ""atr_period"": 20, ""multiplier"": 2.0}",,1,,,
+2880029a-af4b-406a-ae39-552cec1c9153,Donchian Channels,donchian_channels,Donchian Channels - price channel indicator,"{""period"": 20}",,1,,,
+3ed7556f-d8be-441f-99a4-0df37b582d78,Heiken Ashi,heiken_ashi,Heiken Ashi - filtered price candles,"{""smooth_period"": 2, ""confirmation_candles"": 1}",,1,,,
+d87a925e-0ad8-42a1-a4c9-8533af656493,Pivot Points,pivot_points,Pivot Points - support and resistance levels,"{""pivot_type"": 0, ""support_resistance_buffer"": 0.001}",,1,,,
+4be4d655-78a5-4af5-97c8-a1e570f3fadc,Supertrend,supertrend,Supertrend - trend following indicator,"{""atr_period"": 10, ""multiplier"": 3.0}",,1,,,
+bbe66efd-8e83-4941-82b3-9501ae09b436,Fibonacci Retracement,fibonacci_retracement,Fibonacci Retracement - support/resistance levels,"{""lookback"": 50}",,1,,,
+c1bae88b-f487-463f-8a9a-6bbc0030c951,CCI - Commodity Channel Index,cci,Identifica ciclos de preço e condições de sobrecompra/sobrevenda,"{""period"": 20, ""overbought"": 100, ""oversold"": -100}",1,1,1.0,2026-02-28 19:44:43.938076,2026-02-28 19:44:43.938076
+fee309f6-a1da-4fa3-a5e9-5b4d890e5d35,Williams %R,williams_r,Oscilador de momentum que mede níveis de sobrecompra/sobrevenda,"{""period"": 14, ""overbought"": -20, ""oversold"": -80}",1,1,1.0,2026-02-28 19:44:43.939608,2026-02-28 19:44:43.939608
+b7a4b77b-c87b-4e5b-9b23-f9892f418b7c,Rate of Change (ROC),roc,Mede a velocidade de mudança do preço em um período,"{""period"": 12, ""overbought"": 5, ""oversold"": -5}",1,1,1.0,2026-02-28 19:44:43.941151,2026-02-28 19:44:43.941655
+537e0105-9af1-46fd-bfe7-a30834b42530,VWAP - Volume Weighted Average Price,vwap,"Preço médio ponderado pelo volume, usado como suporte/resistência","{""period"": 14, ""std_dev_multiplier"": 1.0}",1,1,1.0,2026-02-28 19:44:43.942689,2026-02-28 19:44:43.942689
+a7d6161b-ed29-4e2c-8a42-65e4025a829e,OBV - On Balance Volume,obv,Indicador de fluxo de volume que relaciona volume com mudança de preço,"{""signal_period"": 9}",1,1,1.0,2026-02-28 19:44:43.943713,2026-02-28 19:44:43.943713

@@ -46,7 +46,7 @@ class AuthService:
         # Create default trading account
         account = Account(
             user_id=user.id,
-            name="Conta Principal",
+            name=f"Conta de {user_data.name}",
             autotrade_demo=True,
             autotrade_real=False,
             uid=0,

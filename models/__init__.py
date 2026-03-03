@@ -142,7 +142,7 @@ class Trade(Base):
     profit = Column(Float, nullable=True)
     payout = Column(Float, nullable=True)
     
-    placed_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    placed_at = Column(DateTime, default=datetime.now, nullable=False, index=True)
     expires_at = Column(DateTime, nullable=True, index=True)
     closed_at = Column(DateTime, nullable=True, index=True)
     
@@ -277,7 +277,7 @@ class Signal(Base):
     is_executed = Column(Boolean, default=False)
     trade_id = Column(String, ForeignKey("trades.id"), nullable=True)
     
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=datetime.now, index=True)
     executed_at = Column(DateTime, nullable=True)
 
     # Relationships

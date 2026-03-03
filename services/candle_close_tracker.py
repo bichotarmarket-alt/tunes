@@ -48,10 +48,10 @@ class CandleCloseTracker:
         # Calcular tempo até o fechamento
         time_until_close = candle_close_time - current_time
 
-        # Se estamos dentro da janela de 0.5 segundos APÓS o fechamento da vela
-        # (não antes do fechamento)
+        # Se estamos dentro da janela de 2.0 segundos APOS o fechamento da vela
+        # (nao antes do fechamento)
         time_since_close = current_time - candle_close_time
-        if 0 <= time_since_close <= 0.5:
+        if 0 <= time_since_close <= 2.0:
             # Verificar se já notificamos este fechamento
             key = f"{symbol}_{timeframe}"
             last_close = self.last_candle_close.get(key, 0)

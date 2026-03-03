@@ -27,7 +27,7 @@ async def execute_trade_on_candle_close(
         current_time = time.time()
         scheduled_for = pending_trade.scheduled_for
 
-        # Verificar se estamos dentro da janela de fechamento (DEPOIS do fechamento, até 0.5 segundos)
+        # Verificar se estamos dentro da janela de fechamento (DEPOIS do fechamento, ate 2.0 segundos)
         # Só executa se já passou do fechamento da vela
         time_diff = current_time - scheduled_for
         if time_diff < 0:
@@ -36,7 +36,7 @@ async def execute_trade_on_candle_close(
                 f"(faltam {abs(time_diff):.3f}s)"
             )
             return None
-        if time_diff > 0.5:
+        if time_diff > 2.0:
             logger.warning(
                 f"⏰ Trade agendado expirou: {pending_trade.symbol} {pending_trade.timeframe}s "
                 f"(diferença: {time_diff:.3f}s)"

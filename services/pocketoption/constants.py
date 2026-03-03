@@ -309,3 +309,23 @@ DEFAULT_HEADERS = {
     "Origin": "https://pocketoption.com",
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
 }
+
+
+def is_otc_asset(asset_symbol: str) -> bool:
+    """
+    Verificar se um ativo é OTC (Over-The-Counter).
+    Ativos OTC terminam com '_otc'.
+    Ativos oficiais (não-OTC) não têm esse sufixo.
+    """
+    return asset_symbol.lower().endswith("_otc")
+
+
+def get_min_duration_for_asset(asset_symbol: str) -> int:
+    """
+    Obter duração mínima permitida para um ativo.
+    - Ativos OTC: 3 segundos (mínimo da API)
+    - Ativos oficiais (não-OTC): 60 segundos (restrição da corretora)
+    """
+    if is_otc_asset(asset_symbol):
+        return 3  # OTC aceita desde 3s
+    return 60  # Ativos oficiais só aceitam >= 60s

@@ -1,0 +1,89 @@
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                    TUNESTRADE PERFORMANCE DASHBOARD                          ║
+║                    Atualizado: 2026-03-03 02:32:42 UTC                    ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+┌─ [SISTEMA & RECURSOS] ──────────────────────────────────────────────────────┐
+│ Uptime:                       00:29:29                                    │
+│ Memória Atual:     216.5 MB                                                    │
+│ Memória Média:     215.9 MB (últimos 5min)                                              │
+│ CPU Atual:           2.6%                                                     │
+│ CPU Média:           1.2% (últimos 5min)                                                     │
+│ Threads:           33                                                            │
+│ Disco Uso:          89.9%                                                    │
+│ Disco I/O:        ↓  0.00 MB ↑  0.00 MB                                                │
+│ Network I/O:      ↓  0.03 MB ↑  0.32 MB                                                │
+│ Load Average:       0.06 /  0.29 /  0.30                                          │
+│ Swap:             1316.4 / 15178.2 MB                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─ [API & LATÊNCIA] ──────────────────────────────────────────────────────────┐
+│ Total Requisições:         87                                                │
+│ Sucessos:                  87 (100.0%)                                      │
+│ Falhas:                     0                                                │
+│ Erros HTTP 4xx:            0                                                │
+│ Erros HTTP 5xx:            0                                                │
+│ RPS Atual:               0.0/s                                                │
+│ RPS Pico:                0.2/s                                                │
+│ Latência Média:          94.6 ms                                                │
+│ Latência P95:           267.4 ms                                                │
+│ Latência P99:           819.0 ms                                                │
+│ Latência Máxima:         819.0 ms                                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─ [CONEXÕES & REDE] ─────────────────────────────────────────────────────────┐
+│ Conexões de Usuários:       0                                                            │
+│ Conexões de Monitoramento:    2                                                 │
+│ Total Conexões WS:          2                                                            │
+│ Contas Ativas:              0                                                            │
+│ Mensagens WS Enviadas:          84                                                │
+│ Mensagens WS Recebidas:      86064                                                │
+│ Reconexões:                      0                                                │
+│ Latência Corretora:          0.0 ms                                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─ [TRADES & SINAIS] ─────────────────────────────────────────────────────────┐
+│ Trades Executados:          0                                                │
+│ Trades Pendentes:           0                                                │
+│ Taxa Sucesso Trades:      0.0%                                               │
+│ Sinais Gerados:             0                                                │
+│ Sinais Executados:          0                                                │
+│ Sinais Baixa Conf.:         0                                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─ [BANCO DE DADOS] ────────────────────────────────────────────────────────────┐
+│ Queries Executadas:      17161                                                │
+│   ├─ Consultas (SELECT):  15087                                                │
+│   ├─ Inserções (INSERT):   1106                                                │
+│   ├─ Atualizações (UPD):    968                                                │
+│   └─ Deleções (DELETE):       0                                                │
+│ Erros DB:                    0                                                │
+│ Queries Lentas (>1s):        0                                                │
+│ Tempo Médio Query:         8.3 ms                                                │
+│ Tempo Total Queries:    143204.9 ms                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─ [PROCESSAMENTO & OTIMIZAÇÕES] ─────────────────────────────────────────────┐
+│ Cache Hits:                25                                                │
+│ Cache Misses:               8                                                │
+│ Cache Hit Rate:          75.8%                                               │
+│ Batch Fila:                 0                                                │
+│ Batch Salvos:               0                                                │
+│ Batch Erros:                0                                                │
+│ Batch Tempo Médio:        0.0 ms                                                │
+│ Batch Throughput:         0.0 sinais/s                                          │
+│ Batch Último Save:            Nunca                                      │
+│ Agregação Última:       2026-03-03 02:28:20                                    │
+│ Agregação Status:           running                                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─ [DADOS & ATIVOS] ──────────────────────────────────────────────────────────┐
+│ Ativos Disponíveis:      189                                                │
+│ Ativos com Dados:         13                                                │
+│ Ativos Desatualizados:     0                                                │
+│ Atraso Máximo:               0 ms                                               │
+│ Atraso Médio:                0 ms                                               │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+

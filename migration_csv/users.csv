@@ -1,0 +1,8 @@
+id,email,hashed_password,name,telegram_chat_id,telegram_username,is_active,is_superuser,role,vip_start_date,vip_end_date,maintenance_logout_at,created_at,updated_at
+de3aa44d-ec1c-460d-bb06-c5227d22764b,leandrodsl2004@gmail.com,$2b$12$N86cVGZTZft040OIhsO.Be6IQ6YXMB9f7pp1Y9SSWlPnw6ToWMeL6,Leandro Souza,5421864068,leandrosouzaw,1,0,vip_plus,2026-02-28 22:12:13.020912,2026-03-30 22:12:13.020912,,2026-02-26 16:41:11.267213,2026-02-28 22:25:35.620064
+5ff7fd45-7f8f-4e88-a9a8-560ac39a0065,admin@gmail.com,$2b$12$plJncMIdEzejgwC6orHbguKRupdZdCu3O7VtoUcc6ktC/EzwHhRqO,Admin,,,1,1,free,,,,2026-02-28 19:51:18.476053,2026-02-28 19:51:18.476053
+09d82abf-343e-492b-9d34-7d9f4a8991fa,user1@gmail.com,$2b$12$6LglVmUfMx.eeEFwqNz5K.R6Q7jIzwykgLPLM3MJZdQCcqdMGsX.O,User1,,,1,0,free,,,,2026-02-28 21:09:46.616521,2026-02-28 21:09:46.616521
+72cf81b1-3bfa-4900-9403-c0cf9e5d176e,user2@gmail.com,$2b$12$LkFPnioEf6h2fNqFFK9TyuaxO0.DUGHLyC4fK7FVLnUKtY/7KFR4q,User2,,,1,0,free,,,,2026-02-28 21:13:45.033310,2026-02-28 21:13:45.033310
+7bb0ce79-ad25-49ce-a471-f1fc74dcc688,user3@gmail.com,$2b$12$wP04ZG40xxETlcj1ITwLIujwXaOlDCYNTwwJVauJUfGHiNgIi45ii,user3,,,1,0,free,,,,2026-02-28 21:21:40.127742,2026-02-28 21:21:40.127742
+1cf978b1-5e00-4ebd-bbec-9f425080ad53,user4@gmail.com,$2b$12$40bw8iuiQU2hDzd/hSPm/eVSzj8WaV14tl5jhvuOIF56luJNAiCVG,User4,,,1,0,free,,,,2026-02-28 21:56:38.488274,2026-02-28 21:56:38.488274
+d47e7c26-d00c-49dd-ac12-ccd0360a3c13,user5@gmail.com,$2b$12$26nmIvToRNby/sPFKgxDLe9ugGZrs9jnEXIg/U3SEOmVLsIj5xlOe,User5,,,1,0,free,,,,2026-03-01 00:59:33.059507,2026-03-01 00:59:33.059507

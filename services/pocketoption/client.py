@@ -50,6 +50,7 @@ class AsyncPocketOptionClient:
         auto_reconnect: bool = True,
         enable_logging: bool = True,
         user_name: str = None,
+        account_id: str = None,
     ):
         """
         Initialize async PocketOption client
@@ -65,6 +66,7 @@ class AsyncPocketOptionClient:
             auto_reconnect: Enable automatic reconnection on disconnection
             enable_logging: Enable detailed logging (default: True)
             user_name: User name for connection identification
+            account_id: Account ID for autotrade status checking
         """
         self.raw_ssid = ssid
         self.is_demo = is_demo
@@ -76,6 +78,7 @@ class AsyncPocketOptionClient:
         self.auto_reconnect = auto_reconnect
         self.enable_logging = enable_logging
         self.user_name = user_name or "Unknown User"
+        self.account_id = account_id
 
         # Configure logging based on preference
         if not enable_logging:
@@ -277,7 +280,12 @@ class AsyncPocketOptionClient:
 
         # Create keep-alive manager
         complete_ssid = self.raw_ssid
-        self._keep_alive_manager = ConnectionKeepAlive(complete_ssid, self.is_demo, user_name=getattr(self, 'user_name', None))
+        self._keep_alive_manager = ConnectionKeepAlive(
+            complete_ssid, 
+            self.is_demo, 
+            user_name=getattr(self, 'user_name', None),
+            account_id=getattr(self, 'account_id', None)
+        )
 
         # Add event handlers
         self._keep_alive_manager.add_event_handler(

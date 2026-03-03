@@ -40,6 +40,7 @@ interface SignalsListResponse {
 }
 
 import { useMaintenanceCheck } from '../hooks/useMaintenanceCheck';
+import { useConnection } from '../contexts/ConnectionContext';
 
 // Componente de card de sinal memoizado para evitar re-renderizações
 const SignalCard = memo(({ signal, onPress, key }: { signal: Signal; onPress: () => void; key: string }) => {
@@ -109,7 +110,7 @@ const SignalCard = memo(({ signal, onPress, key }: { signal: Signal; onPress: ()
             ]}
           >
             <Text style={[styles.statusText, signal.is_executed ? styles.executedText : styles.pendingText]}>
-              {signal.is_executed ? 'Executado' : 'Pendente'}
+              {signal.is_executed ? 'Executado' : 'Baixa confiança'}
             </Text>
           </View>
         </View>
@@ -208,7 +209,7 @@ export default function SinaisScreen() {
       }
       setError(null);
       
-      const response = await apiClient.get<SignalsListResponse>('/signals/?executed=true');
+      const response = await apiClient.get<SignalsListResponse>('/signals/?limit=100');
       const allSignals = response.signals || [];
 
       // Ordenar por created_at em ordem decrescente
@@ -269,6 +270,16 @@ export default function SinaisScreen() {
   useEffect(() => {
     fetchSignals(true, 1);
   }, [fetchSignals]);
+
+  // Recarregar dados quando a conexão é restaurada
+  const { connectionRestoredAt } = useConnection();
+  useEffect(() => {
+    if (connectionRestoredAt) {
+      console.log('[SinaisScreen] Conexão restaurada, recarregando dados...');
+      setError(null); // Limpar erro anterior
+      fetchSignals(true, 1);
+    }
+  }, [connectionRestoredAt, fetchSignals]);
 
   // Polling para atualizar sinais em tempo real (a cada 5 segundos)
   useEffect(() => {
@@ -544,7 +555,7 @@ export default function SinaisScreen() {
                         ]}
                       >
                         <Text style={[styles.statusText, currentSignal.is_executed ? styles.executedText : styles.pendingText]}>
-                          {currentSignal.is_executed ? 'Executado' : 'Pendente'}
+                          {currentSignal.is_executed ? 'Executado' : 'Baixa confiança'}
                         </Text>
                       </View>
                     </View>
@@ -626,7 +637,7 @@ export default function SinaisScreen() {
                           ]}
                         >
                           <Text style={[styles.statusText, signal.is_executed ? styles.executedText : styles.pendingText]}>
-                            {signal.is_executed ? 'Executado' : 'Pendente'}
+                            {signal.is_executed ? 'Executado' : 'Baixa confiança'}
                           </Text>
                         </View>
                       </View>

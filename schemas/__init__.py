@@ -1,7 +1,8 @@
 """Schemas for API responses and requests"""
 
-from pydantic import BaseModel, EmailStr, Field
-from datetime import datetime
+import json
+from pydantic import BaseModel, EmailStr, Field, field_validator
+from datetime import date, datetime, timezone
 from typing import Optional, List, Any, Dict
 from enum import Enum
 
@@ -221,6 +222,26 @@ class StrategyResponse(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime] = None
 
+    @field_validator('parameters', mode='before')
+    @classmethod
+    def parse_parameters(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                return None
+        return v
+
+    @field_validator('indicators', mode='before')
+    @classmethod
+    def parse_indicators(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                return None
+        return v
+
 
 class StrategyCreate(BaseModel):
     """Strategy creation schema"""
@@ -427,9 +448,9 @@ class AutoTradeConfigCreate(BaseModel):
     """AutoTrade config creation schema"""
     account_id: str
     strategy_id: Optional[str] = None
-    amount: float = 1.0
-    stop1: int = 0
-    stop2: int = 0
+    amount: float = 10.0
+    stop1: int = 3
+    stop2: int = 5
     no_hibernate_on_consecutive_stop: bool = False
     stop_amount_win: float = 0.0
     stop_amount_loss: float = 0.0
@@ -441,6 +462,7 @@ class AutoTradeConfigCreate(BaseModel):
     trade_timing: str = 'on_signal'
     all_win_percentage: float = 0.0
     highest_balance: Optional[float] = None
+    is_active: bool = True
     # Redução Inteligente
     smart_reduction_enabled: bool = False
     smart_reduction_loss_trigger: int = 3
@@ -450,6 +472,13 @@ class AutoTradeConfigCreate(BaseModel):
     smart_reduction_win_count: int = 0
     smart_reduction_cascading: bool = False  # Redução recursiva/cascata
     smart_reduction_cascade_level: int = 0  # Nível atual da cascata
+
+    @field_validator('cooldown_seconds', mode='before')
+    @classmethod
+    def ensure_cooldown_is_string(cls, v):
+        if v is None:
+            return '0'
+        return str(v)
 
 
 class AutoTradeConfigUpdate(BaseModel):
@@ -465,7 +494,7 @@ class AutoTradeConfigUpdate(BaseModel):
     soros: Optional[int] = None
     martingale: Optional[int] = None
     timeframe: Optional[int] = None
-    cooldown_seconds: Optional[int] = None
+    cooldown_seconds: Optional[str] = None
     min_confidence: Optional[float] = None
     trade_timing: Optional[str] = None
     all_win_percentage: Optional[float] = None
@@ -480,6 +509,13 @@ class AutoTradeConfigUpdate(BaseModel):
     smart_reduction_win_count: Optional[int] = None
     smart_reduction_cascading: Optional[bool] = None  # Redução recursiva/cascata
     smart_reduction_cascade_level: Optional[int] = None  # Nível atual da cascata
+
+    @field_validator('cooldown_seconds', mode='before')
+    @classmethod
+    def ensure_cooldown_is_string(cls, v):
+        if v is None:
+            return None
+        return str(v)
 
 
 # ============================================
@@ -501,6 +537,35 @@ class IndicatorRankingsResponse(BaseModel):
     """Indicator rankings response"""
     rankings: List[IndicatorCombinationRanking]
     total_combinations: int
+
+
+# ============================================
+# REPORTS
+# ============================================
+
+class DailySummaryResponse(BaseModel):
+    """Resposta do resumo diário de sinais"""
+    id: str
+    date: date
+    strategy_id: str
+    asset_id: str
+    total_signals: int
+    buy_signals: int
+    sell_signals: int
+    executed_signals: int
+    avg_confidence: float
+    execution_rate: float
+    
+    class Config:
+        from_attributes = True
+
+
+class ReportQueryParams(BaseModel):
+    """Parâmetros para queries de relatório"""
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    strategy_id: Optional[str] = None
+    asset_id: Optional[str] = None
 
 
 __all__ = [
@@ -562,5 +627,9 @@ __all__ = [
 
     # Indicator Ranking
     "IndicatorCombinationRanking",
-    "IndicatorRankingsResponse"
+    "IndicatorRankingsResponse",
+    
+    # Reports
+    "DailySummaryResponse",
+    "ReportQueryParams"
 ]

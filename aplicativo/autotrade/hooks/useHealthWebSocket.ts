@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { API_CONFIG } from '../constants/api';
+import { connectionDetector } from '../services/connectionDetector';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface HealthMessage {
@@ -23,7 +23,14 @@ export function useHealthWebSocket() {
           return;
         }
 
-        const wsUrl = `${API_CONFIG.BASE_URL.replace('http', 'ws')}/ws/health?token=${token}`;
+        const connectionMethod = await connectionDetector.detectConnectionMethod();
+        if (!connectionMethod.reachable) {
+          console.log('[HealthWebSocket] Backend não acessível, pulando conexão WebSocket');
+          return;
+        }
+
+        const wsUrl = `${connectionMethod.url.replace('http', 'ws')}/ws/health?token=${token}`;
+        console.log('[HealthWebSocket] Conectando a:', wsUrl);
         const ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {

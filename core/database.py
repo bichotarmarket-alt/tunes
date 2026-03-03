@@ -6,37 +6,58 @@ from sqlalchemy import event
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 from core.config import settings
+from loguru import logger
 import os
+import time
+import asyncio
 
 
-connect_args = {"check_same_thread": False, "timeout": 60}
+# PostgreSQL connection - no SQLite-specific args needed
+connect_args = {}
 
-# Create async engine for SQLite with NullPool to avoid shared connection issues
+# Create async engine for PostgreSQL
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DB_ECHO,
-    connect_args=connect_args,
-    poolclass=NullPool,  # NullPool = no connection pooling, each request gets its own connection
-    pool_pre_ping=True,  # Verify connections before using
+    poolclass=NullPool,  # NullPool for stable async operations
+    pool_pre_ping=True,
 )
 
+# No global lock needed for PostgreSQL (uses row-level locking)
+db_lock = None
 
-@event.listens_for(engine.sync_engine, "connect")
-def _set_sqlite_pragma(dbapi_connection, connection_record):
-    cursor = dbapi_connection.cursor()
-    # Performance optimizations - only set pragmas that don't require transaction
-    cursor.execute("PRAGMA journal_mode=WAL")  # Write-Ahead Logging for better concurrency
-    cursor.execute("PRAGMA foreign_keys=ON")  # Enable foreign key constraints
-    cursor.execute("PRAGMA busy_timeout=60000")  # Increase timeout to 60 seconds
-    cursor.execute("PRAGMA cache_size=-64000")  # 64MB cache (negative = KB)
-    cursor.execute("PRAGMA temp_store=MEMORY")  # Store temporary tables in memory
-    cursor.execute("PRAGMA mmap_size=268435456")  # 256MB memory-mapped I/O
-    cursor.execute("PRAGMA page_size=4096")  # Optimal page size for most systems
-    cursor.execute("PRAGMA locking_mode=NORMAL")  # Normal locking mode
-    cursor.execute("PRAGMA wal_autocheckpoint=1000")  # Checkpoint every 1000 pages
-    # REMOVED: PRAGMA synchronous - cannot be changed inside a transaction
-    # The default is usually NORMAL which is sufficient
-    cursor.close()
+# Event listener para tracking de queries
+@event.listens_for(engine.sync_engine, "before_cursor_execute")
+def _before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+    """Capturar tempo antes da execução da query"""
+    context._query_start_time = time.time()
+
+@event.listens_for(engine.sync_engine, "after_cursor_execute")
+def _after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+    """Tracking de query executada com tipo (SELECT, INSERT, UPDATE, DELETE)"""
+    try:
+        elapsed = (time.time() - context._query_start_time) * 1000  # ms
+        
+        # Detectar tipo de query a partir do statement SQL
+        statement_lower = str(statement).strip().lower()
+        if statement_lower.startswith('select'):
+            query_type = 'select'
+        elif statement_lower.startswith('insert'):
+            query_type = 'insert'
+        elif statement_lower.startswith('update'):
+            query_type = 'update'
+        elif statement_lower.startswith('delete'):
+            query_type = 'delete'
+        else:
+            query_type = 'select'  # default
+        
+        # Import seguro do performance_monitor
+        import sys
+        if 'services.performance_monitor' in sys.modules:
+            from services.performance_monitor import performance_monitor
+            performance_monitor.record_db_query(time_ms=elapsed, error=False, query_type=query_type)
+    except Exception:
+        pass
 
 # Create async session factory
 AsyncSessionLocal = async_sessionmaker(
@@ -46,6 +67,110 @@ AsyncSessionLocal = async_sessionmaker(
     autocommit=False,
     autoflush=False
 )
+
+# Patch para rastrear automaticamente todos os tipos de query
+_original_execute = AsyncSession.execute
+_original_add = AsyncSession.add
+_original_add_all = AsyncSession.add_all
+_original_delete = AsyncSession.delete
+
+async def _patched_execute(self, statement, params=None, *args, **kwargs):
+    """Wrapper para executar e rastrear tipo de query"""
+    try:
+        result = await _original_execute(self, statement, params, *args, **kwargs)
+        
+        # Detectar tipo de query a partir do statement
+        query_type = 'select'  # default
+        statement_str = str(statement).strip().lower()
+        if statement_str.startswith('select'):
+            query_type = 'select'
+        elif statement_str.startswith('insert'):
+            query_type = 'insert'
+        elif statement_str.startswith('update'):
+            query_type = 'update'
+        elif statement_str.startswith('delete'):
+            query_type = 'delete'
+        
+        # Registrar no performance monitor
+        try:
+            from services.performance_monitor import performance_monitor
+            performance_monitor.record_db_query(time_ms=0, error=False, query_type=query_type)
+        except Exception:
+            pass
+        
+        return result
+    except Exception as e:
+        # Registrar erro
+        try:
+            from services.performance_monitor import performance_monitor
+            performance_monitor.record_db_query(time_ms=0, error=True, query_type='select', error_message=str(e))
+        except Exception:
+            pass
+        raise e
+
+def _patched_add(self, instance, *args, **kwargs):
+    """Wrapper para add (INSERT)"""
+    try:
+        result = _original_add(self, instance, *args, **kwargs)
+        try:
+            from services.performance_monitor import performance_monitor
+            performance_monitor.record_db_query(time_ms=0, error=False, query_type='insert')
+        except Exception:
+            pass
+        return result
+    except Exception as e:
+        try:
+            from services.performance_monitor import performance_monitor
+            performance_monitor.record_db_query(time_ms=0, error=True, query_type='insert', error_message=str(e))
+        except Exception:
+            pass
+        raise e
+
+def _patched_add_all(self, instances, *args, **kwargs):
+    """Wrapper para add_all (múltiplos INSERTs)"""
+    try:
+        result = _original_add_all(self, instances, *args, **kwargs)
+        try:
+            from services.performance_monitor import performance_monitor
+            if instances:
+                for _ in instances:
+                    performance_monitor.record_db_query(time_ms=0, error=False, query_type='insert')
+        except Exception:
+            pass
+        return result
+    except Exception as e:
+        try:
+            from services.performance_monitor import performance_monitor
+            if instances:
+                for _ in instances:
+                    performance_monitor.record_db_query(time_ms=0, error=True, query_type='insert', error_message=str(e))
+        except Exception:
+            pass
+        raise e
+
+def _patched_delete(self, instance, *args, **kwargs):
+    """Wrapper para delete (DELETE)"""
+    try:
+        result = _original_delete(self, instance, *args, **kwargs)
+        try:
+            from services.performance_monitor import performance_monitor
+            performance_monitor.record_db_query(time_ms=0, error=False, query_type='delete')
+        except Exception:
+            pass
+        return result
+    except Exception as e:
+        try:
+            from services.performance_monitor import performance_monitor
+            performance_monitor.record_db_query(time_ms=0, error=True, query_type='delete', error_message=str(e))
+        except Exception:
+            pass
+        raise e
+
+# Aplicar patches
+AsyncSession.execute = _patched_execute
+AsyncSession.add = _patched_add
+AsyncSession.add_all = _patched_add_all
+AsyncSession.delete = _patched_delete
 
 # Base class for models
 Base = declarative_base()
@@ -72,14 +197,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_db():
-    """Initialize database tables"""
-    # Create data directory if it doesn't exist
-    db_path = settings.DATABASE_URL.replace("sqlite+aiosqlite:///", "")
-    db_dir = os.path.dirname(db_path)
-    
-    if db_dir and not os.path.exists(db_dir):
-        os.makedirs(db_dir, exist_ok=True)
-    
+    """Initialize database tables for PostgreSQL"""
     # Create all tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -93,18 +211,45 @@ async def close_db():
 @asynccontextmanager
 async def get_db_context():
     """
-    Context manager for database session
+    Context manager for database session with PostgreSQL
     
     Usage:
         async with get_db_context() as db:
             result = await db.execute(query)
     """
+    import time
+    from services.performance_monitor import performance_monitor
+    
+    query_count_before = performance_monitor.stats['db_queries']
+    
+    # PostgreSQL doesn't need locks - uses row-level locking
     async with AsyncSessionLocal() as session:
         try:
             yield session
             await session.commit()
-        except Exception:
-            await session.rollback()
+            
+            # Contar queries executadas nesta sessão
+            queries_executed = performance_monitor.stats['db_queries'] - query_count_before
+            if queries_executed > 0:
+                logger.debug(f"[DB] {queries_executed} queries executadas na sessão")
+        except Exception as e:
+            # Try rollback only if session is still active
+            try:
+                if session.is_active:
+                    await session.rollback()
+            except Exception:
+                pass  # Ignore rollback errors
+            # Registrar erro no performance monitor e logar
+            try:
+                performance_monitor.stats['db_errors'] += 1
+                error_msg = str(e)
+                # Erro específico de duplicatas - informar usuário
+                if "2 were matched" in error_msg and "UPDATE" in error_msg:
+                    logger.error(f"[DB ERROR] Detectado registros duplicados. Execute: python cleanup_duplicates.py")
+                else:
+                    logger.error(f"[DB ERROR] Transação falhou: {e}")
+            except Exception:
+                pass
             raise
         finally:
             await session.close()
@@ -114,7 +259,8 @@ async def check_db_connection() -> bool:
     """Check if database connection is working"""
     try:
         async with AsyncSessionLocal() as session:
-            await session.execute("SELECT 1")
+            from sqlalchemy import text
+            await session.execute(text("SELECT 1"))
         return True
     except Exception:
         return False

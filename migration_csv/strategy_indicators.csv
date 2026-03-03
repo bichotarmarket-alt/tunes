@@ -1,0 +1,116 @@
+strategy_id,indicator_id,parameters,created_at
+4ff6f89e-0790-4882-b867-65d0fe7aa26e,93652a62-3803-43b9-89d3-ca74cbdf5543,"{""period"": 14}",2026-02-28 21:12:40.705704
+4ff6f89e-0790-4882-b867-65d0fe7aa26e,abcdaacc-8163-4f7e-9d04-7da40832ad72,"{""period"": 14}",2026-02-28 21:12:40.706212
+4ff6f89e-0790-4882-b867-65d0fe7aa26e,ec9b0228-509c-490b-b3f6-14d56e9402ae,"{""period"": 20, ""std_dev"": 2}",2026-02-28 21:12:40.708206
+4ff6f89e-0790-4882-b867-65d0fe7aa26e,c1bae88b-f487-463f-8a9a-6bbc0030c951,"{""period"": 20, ""overbought"": 100, ""oversold"": -100}",2026-02-28 21:12:40.709203
+4ff6f89e-0790-4882-b867-65d0fe7aa26e,2880029a-af4b-406a-ae39-552cec1c9153,"{""period"": 20}",2026-02-28 21:12:40.710206
+4ff6f89e-0790-4882-b867-65d0fe7aa26e,2f201651-60d7-4933-b0a7-a381abfb1e30,"{""period"": 20}",2026-02-28 21:12:40.713774
+4ff6f89e-0790-4882-b867-65d0fe7aa26e,bbe66efd-8e83-4941-82b3-9501ae09b436,"{""lookback"": 50}",2026-02-28 21:12:40.724250
+4ff6f89e-0790-4882-b867-65d0fe7aa26e,3ed7556f-d8be-441f-99a4-0df37b582d78,"{""smooth_period"": 2, ""confirmation_candles"": 1}",2026-02-28 21:12:40.725247
+4ff6f89e-0790-4882-b867-65d0fe7aa26e,818365dc-335a-4cbf-9e2b-b7533a43eade,"{""tenkan_period"": 9, ""kijun_period"": 26, ""senkou_span_b_period"": 52, ""chikou_shift"": 26}",2026-02-28 21:12:40.726785
+4ff6f89e-0790-4882-b867-65d0fe7aa26e,717361e1-0bc7-44b0-ba5a-c033622c62e0,"{""ema_period"": 20, ""atr_period"": 20, ""multiplier"": 2}",2026-02-28 21:12:40.727328
+4ff6f89e-0790-4882-b867-65d0fe7aa26e,b78c6a59-5d07-4cd0-a6d9-62e13d83f003,"{""fast_period"": 12, ""slow_period"": 26, ""signal_period"": 9}",2026-02-28 21:12:40.728290
+4ff6f89e-0790-4882-b867-65d0fe7aa26e,7256ba5a-003a-48dd-ba07-d8ea71874d1b,"{""period"": 14}",2026-02-28 21:12:40.729288
+4ff6f89e-0790-4882-b867-65d0fe7aa26e,a7d6161b-ed29-4e2c-8a42-65e4025a829e,"{""signal_period"": 9}",2026-02-28 21:12:40.730285
+4ff6f89e-0790-4882-b867-65d0fe7aa26e,4b283271-d73a-4d8a-8c5c-60ecf656aa17,"{""initial_af"": 0.02, ""max_af"": 0.2, ""step_af"": 0.02}",2026-02-28 21:12:40.735017
+4ff6f89e-0790-4882-b867-65d0fe7aa26e,d87a925e-0ad8-42a1-a4c9-8533af656493,"{""pivot_type"": 0, ""support_resistance_buffer"": 0.001}",2026-02-28 21:12:40.746682
+4ff6f89e-0790-4882-b867-65d0fe7aa26e,c07803cd-9d2a-488f-878b-f1f4392d1af1,"{""period"": 14, ""overbought"": 70, ""oversold"": 30}",2026-02-28 21:12:40.748617
+4ff6f89e-0790-4882-b867-65d0fe7aa26e,b7a4b77b-c87b-4e5b-9b23-f9892f418b7c,"{""period"": 12, ""overbought"": 5, ""oversold"": -5}",2026-02-28 21:12:40.749613
+4ff6f89e-0790-4882-b867-65d0fe7aa26e,90f64788-daa7-4d55-86b1-37ccfa6d9d94,"{""period"": 50}",2026-02-28 21:12:40.751211
+4ff6f89e-0790-4882-b867-65d0fe7aa26e,8f1cfe12-046d-4d02-a646-afff93ec7337,"{""k_period"": 14, ""d_period"": 3, ""slowing"": 3, ""overbought"": 80, ""oversold"": 20}",2026-02-28 21:12:40.752159
+4ff6f89e-0790-4882-b867-65d0fe7aa26e,4be4d655-78a5-4af5-97c8-a1e570f3fadc,"{""atr_period"": 10, ""multiplier"": 3}",2026-02-28 21:12:40.753156
+4ff6f89e-0790-4882-b867-65d0fe7aa26e,537e0105-9af1-46fd-bfe7-a30834b42530,"{""period"": 14, ""std_dev_multiplier"": 1}",2026-02-28 21:12:40.754154
+4ff6f89e-0790-4882-b867-65d0fe7aa26e,fee309f6-a1da-4fa3-a5e9-5b4d890e5d35,"{""period"": 14, ""overbought"": -20, ""oversold"": -80}",2026-02-28 21:12:40.754154
+4ff6f89e-0790-4882-b867-65d0fe7aa26e,c6eb7b6a-7636-494d-8968-a8ce3d1581c4,"{""swing_period"": 20, ""zone_strength"": 3, ""zone_tolerance"": 0.001, ""min_zone_width"": 0.001, ""atr_multiplier"": 1}",2026-02-28 21:12:40.758532
+e9b51b20-8e32-42df-b1ec-d9f8c2361ae6,93652a62-3803-43b9-89d3-ca74cbdf5543,"{""period"": 14}",2026-02-28 21:14:07.255494
+e9b51b20-8e32-42df-b1ec-d9f8c2361ae6,abcdaacc-8163-4f7e-9d04-7da40832ad72,"{""period"": 14}",2026-02-28 21:14:07.257485
+e9b51b20-8e32-42df-b1ec-d9f8c2361ae6,ec9b0228-509c-490b-b3f6-14d56e9402ae,"{""period"": 20, ""std_dev"": 2}",2026-02-28 21:14:07.259480
+e9b51b20-8e32-42df-b1ec-d9f8c2361ae6,c1bae88b-f487-463f-8a9a-6bbc0030c951,"{""period"": 20, ""overbought"": 100, ""oversold"": -100}",2026-02-28 21:14:07.263472
+e9b51b20-8e32-42df-b1ec-d9f8c2361ae6,2880029a-af4b-406a-ae39-552cec1c9153,"{""period"": 20}",2026-02-28 21:14:07.273969
+e9b51b20-8e32-42df-b1ec-d9f8c2361ae6,2f201651-60d7-4933-b0a7-a381abfb1e30,"{""period"": 20}",2026-02-28 21:14:07.275538
+e9b51b20-8e32-42df-b1ec-d9f8c2361ae6,bbe66efd-8e83-4941-82b3-9501ae09b436,"{""lookback"": 50}",2026-02-28 21:14:07.277531
+e9b51b20-8e32-42df-b1ec-d9f8c2361ae6,3ed7556f-d8be-441f-99a4-0df37b582d78,"{""smooth_period"": 2, ""confirmation_candles"": 1}",2026-02-28 21:14:07.278528
+e9b51b20-8e32-42df-b1ec-d9f8c2361ae6,818365dc-335a-4cbf-9e2b-b7533a43eade,"{""tenkan_period"": 9, ""kijun_period"": 26, ""senkou_span_b_period"": 52, ""chikou_shift"": 26}",2026-02-28 21:14:07.713666
+e9b51b20-8e32-42df-b1ec-d9f8c2361ae6,717361e1-0bc7-44b0-ba5a-c033622c62e0,"{""ema_period"": 20, ""atr_period"": 20, ""multiplier"": 2}",2026-02-28 21:14:07.729556
+e9b51b20-8e32-42df-b1ec-d9f8c2361ae6,b78c6a59-5d07-4cd0-a6d9-62e13d83f003,"{""fast_period"": 12, ""slow_period"": 26, ""signal_period"": 9}",2026-02-28 21:14:07.733133
+e9b51b20-8e32-42df-b1ec-d9f8c2361ae6,7256ba5a-003a-48dd-ba07-d8ea71874d1b,"{""period"": 14}",2026-02-28 21:14:07.736875
+e9b51b20-8e32-42df-b1ec-d9f8c2361ae6,a7d6161b-ed29-4e2c-8a42-65e4025a829e,"{""signal_period"": 9}",2026-02-28 21:14:07.753164
+e9b51b20-8e32-42df-b1ec-d9f8c2361ae6,4b283271-d73a-4d8a-8c5c-60ecf656aa17,"{""initial_af"": 0.02, ""max_af"": 0.2, ""step_af"": 0.02}",2026-02-28 21:14:07.757983
+e9b51b20-8e32-42df-b1ec-d9f8c2361ae6,d87a925e-0ad8-42a1-a4c9-8533af656493,"{""pivot_type"": 0, ""support_resistance_buffer"": 0.001}",2026-02-28 21:14:07.765614
+e9b51b20-8e32-42df-b1ec-d9f8c2361ae6,c07803cd-9d2a-488f-878b-f1f4392d1af1,"{""period"": 14, ""overbought"": 70, ""oversold"": 30}",2026-02-28 21:14:07.777226
+e9b51b20-8e32-42df-b1ec-d9f8c2361ae6,b7a4b77b-c87b-4e5b-9b23-f9892f418b7c,"{""period"": 12, ""overbought"": 5, ""oversold"": -5}",2026-02-28 21:14:07.781685
+e9b51b20-8e32-42df-b1ec-d9f8c2361ae6,90f64788-daa7-4d55-86b1-37ccfa6d9d94,"{""period"": 50}",2026-02-28 21:14:07.793143
+e9b51b20-8e32-42df-b1ec-d9f8c2361ae6,8f1cfe12-046d-4d02-a646-afff93ec7337,"{""k_period"": 14, ""d_period"": 3, ""slowing"": 3, ""overbought"": 80, ""oversold"": 20}",2026-02-28 21:14:07.804488
+e9b51b20-8e32-42df-b1ec-d9f8c2361ae6,4be4d655-78a5-4af5-97c8-a1e570f3fadc,"{""atr_period"": 10, ""multiplier"": 3}",2026-02-28 21:14:07.805989
+e9b51b20-8e32-42df-b1ec-d9f8c2361ae6,537e0105-9af1-46fd-bfe7-a30834b42530,"{""period"": 14, ""std_dev_multiplier"": 1}",2026-02-28 21:14:07.806988
+e9b51b20-8e32-42df-b1ec-d9f8c2361ae6,fee309f6-a1da-4fa3-a5e9-5b4d890e5d35,"{""period"": 14, ""overbought"": -20, ""oversold"": -80}",2026-02-28 21:14:08.240610
+e9b51b20-8e32-42df-b1ec-d9f8c2361ae6,c6eb7b6a-7636-494d-8968-a8ce3d1581c4,"{""swing_period"": 20, ""zone_strength"": 3, ""zone_tolerance"": 0.001, ""min_zone_width"": 0.001, ""atr_multiplier"": 1}",2026-02-28 21:14:08.255029
+ac4035e5-0145-40ba-9743-279c13ec08ad,2880029a-af4b-406a-ae39-552cec1c9153,"{""period"": 20}",2026-02-28 21:43:47.966479
+ac4035e5-0145-40ba-9743-279c13ec08ad,2f201651-60d7-4933-b0a7-a381abfb1e30,"{""period"": 18}",2026-02-28 21:43:47.988239
+ac4035e5-0145-40ba-9743-279c13ec08ad,3ed7556f-d8be-441f-99a4-0df37b582d78,"{""smooth_period"": 2, ""confirmation_candles"": 1}",2026-02-28 21:43:47.994849
+ac4035e5-0145-40ba-9743-279c13ec08ad,4b283271-d73a-4d8a-8c5c-60ecf656aa17,"{""initial_af"": 0.02, ""max_af"": 0.2, ""step_af"": 0.02}",2026-02-28 21:43:47.996250
+ac4035e5-0145-40ba-9743-279c13ec08ad,4be4d655-78a5-4af5-97c8-a1e570f3fadc,"{""atr_period"": 10, ""multiplier"": 3}",2026-02-28 21:43:47.999539
+ac4035e5-0145-40ba-9743-279c13ec08ad,537e0105-9af1-46fd-bfe7-a30834b42530,"{""period"": 14, ""std_dev_multiplier"": 1}",2026-02-28 21:43:48.002505
+ac4035e5-0145-40ba-9743-279c13ec08ad,717361e1-0bc7-44b0-ba5a-c033622c62e0,"{""ema_period"": 20, ""atr_period"": 20, ""multiplier"": 2}",2026-02-28 21:43:48.005083
+ac4035e5-0145-40ba-9743-279c13ec08ad,7256ba5a-003a-48dd-ba07-d8ea71874d1b,"{""period"": 14}",2026-02-28 21:43:48.022542
+ac4035e5-0145-40ba-9743-279c13ec08ad,818365dc-335a-4cbf-9e2b-b7533a43eade,"{""tenkan_period"": 9, ""kijun_period"": 26, ""senkou_span_b_period"": 52, ""chikou_shift"": 26}",2026-02-28 21:43:48.026011
+ac4035e5-0145-40ba-9743-279c13ec08ad,8f1cfe12-046d-4d02-a646-afff93ec7337,"{""k_period"": 50, ""d_period"": 3, ""slowing"": 3, ""overbought"": 80, ""oversold"": 20}",2026-02-28 21:43:48.027045
+ac4035e5-0145-40ba-9743-279c13ec08ad,90f64788-daa7-4d55-86b1-37ccfa6d9d94,"{""period"": 50}",2026-02-28 21:43:48.029106
+ac4035e5-0145-40ba-9743-279c13ec08ad,93652a62-3803-43b9-89d3-ca74cbdf5543,"{""period"": 14}",2026-02-28 21:43:48.031096
+ac4035e5-0145-40ba-9743-279c13ec08ad,a7d6161b-ed29-4e2c-8a42-65e4025a829e,"{""signal_period"": 9}",2026-02-28 21:43:48.032734
+ac4035e5-0145-40ba-9743-279c13ec08ad,abcdaacc-8163-4f7e-9d04-7da40832ad72,"{""period"": 14}",2026-02-28 21:43:48.036232
+ac4035e5-0145-40ba-9743-279c13ec08ad,b78c6a59-5d07-4cd0-a6d9-62e13d83f003,"{""fast_period"": 12, ""slow_period"": 26, ""signal_period"": 9}",2026-02-28 21:43:48.041248
+ac4035e5-0145-40ba-9743-279c13ec08ad,b7a4b77b-c87b-4e5b-9b23-f9892f418b7c,"{""period"": 12, ""overbought"": 5, ""oversold"": -5}",2026-02-28 21:43:48.043217
+ac4035e5-0145-40ba-9743-279c13ec08ad,bbe66efd-8e83-4941-82b3-9501ae09b436,"{""lookback"": 50}",2026-02-28 21:43:48.045151
+ac4035e5-0145-40ba-9743-279c13ec08ad,c07803cd-9d2a-488f-878b-f1f4392d1af1,"{""period"": 14, ""overbought"": 70, ""oversold"": 30}",2026-02-28 21:43:48.046510
+ac4035e5-0145-40ba-9743-279c13ec08ad,c1bae88b-f487-463f-8a9a-6bbc0030c951,"{""period"": 20, ""overbought"": 100, ""oversold"": -100}",2026-02-28 21:43:48.058350
+ac4035e5-0145-40ba-9743-279c13ec08ad,c6eb7b6a-7636-494d-8968-a8ce3d1581c4,"{""swing_period"": 20, ""zone_strength"": 3, ""zone_tolerance"": 0.001, ""min_zone_width"": 0.001, ""atr_multiplier"": 1}",2026-02-28 21:43:48.076772
+ac4035e5-0145-40ba-9743-279c13ec08ad,d87a925e-0ad8-42a1-a4c9-8533af656493,"{""pivot_type"": 0, ""support_resistance_buffer"": 0.001}",2026-02-28 21:43:48.082763
+ac4035e5-0145-40ba-9743-279c13ec08ad,ec9b0228-509c-490b-b3f6-14d56e9402ae,"{""period"": 20, ""std_dev"": 2}",2026-02-28 21:43:48.084943
+ac4035e5-0145-40ba-9743-279c13ec08ad,fee309f6-a1da-4fa3-a5e9-5b4d890e5d35,"{""period"": 14, ""overbought"": -20, ""oversold"": -80}",2026-02-28 21:43:48.085936
+aeb90a79-fb2d-498b-b85a-8a2936112830,93652a62-3803-43b9-89d3-ca74cbdf5543,"{""period"": 14}",2026-02-28 21:58:22.919431
+aeb90a79-fb2d-498b-b85a-8a2936112830,abcdaacc-8163-4f7e-9d04-7da40832ad72,"{""period"": 14}",2026-02-28 21:58:22.962179
+aeb90a79-fb2d-498b-b85a-8a2936112830,ec9b0228-509c-490b-b3f6-14d56e9402ae,"{""period"": 20, ""std_dev"": 2}",2026-02-28 21:58:22.983322
+aeb90a79-fb2d-498b-b85a-8a2936112830,c1bae88b-f487-463f-8a9a-6bbc0030c951,"{""period"": 20, ""overbought"": 100, ""oversold"": -100}",2026-02-28 21:58:23.000111
+aeb90a79-fb2d-498b-b85a-8a2936112830,2880029a-af4b-406a-ae39-552cec1c9153,"{""period"": 20}",2026-02-28 21:58:23.004100
+aeb90a79-fb2d-498b-b85a-8a2936112830,2f201651-60d7-4933-b0a7-a381abfb1e30,"{""period"": 20}",2026-02-28 21:58:23.007451
+aeb90a79-fb2d-498b-b85a-8a2936112830,bbe66efd-8e83-4941-82b3-9501ae09b436,"{""lookback"": 50}",2026-02-28 21:58:23.009445
+aeb90a79-fb2d-498b-b85a-8a2936112830,3ed7556f-d8be-441f-99a4-0df37b582d78,"{""smooth_period"": 2, ""confirmation_candles"": 1}",2026-02-28 21:58:23.010442
+aeb90a79-fb2d-498b-b85a-8a2936112830,818365dc-335a-4cbf-9e2b-b7533a43eade,"{""tenkan_period"": 9, ""kijun_period"": 26, ""senkou_span_b_period"": 52, ""chikou_shift"": 26}",2026-02-28 21:58:23.012437
+aeb90a79-fb2d-498b-b85a-8a2936112830,717361e1-0bc7-44b0-ba5a-c033622c62e0,"{""ema_period"": 20, ""atr_period"": 20, ""multiplier"": 2}",2026-02-28 21:58:23.022039
+aeb90a79-fb2d-498b-b85a-8a2936112830,b78c6a59-5d07-4cd0-a6d9-62e13d83f003,"{""fast_period"": 12, ""slow_period"": 26, ""signal_period"": 9}",2026-02-28 21:58:23.034128
+aeb90a79-fb2d-498b-b85a-8a2936112830,7256ba5a-003a-48dd-ba07-d8ea71874d1b,"{""period"": 14}",2026-02-28 21:58:23.036697
+aeb90a79-fb2d-498b-b85a-8a2936112830,a7d6161b-ed29-4e2c-8a42-65e4025a829e,"{""signal_period"": 9}",2026-02-28 21:58:23.037229
+aeb90a79-fb2d-498b-b85a-8a2936112830,4b283271-d73a-4d8a-8c5c-60ecf656aa17,"{""initial_af"": 0.02, ""max_af"": 0.2, ""step_af"": 0.02}",2026-02-28 21:58:23.039198
+aeb90a79-fb2d-498b-b85a-8a2936112830,d87a925e-0ad8-42a1-a4c9-8533af656493,"{""pivot_type"": 0, ""support_resistance_buffer"": 0.001}",2026-02-28 21:58:23.040195
+aeb90a79-fb2d-498b-b85a-8a2936112830,c07803cd-9d2a-488f-878b-f1f4392d1af1,"{""period"": 14, ""overbought"": 70, ""oversold"": 30}",2026-02-28 21:58:23.041212
+aeb90a79-fb2d-498b-b85a-8a2936112830,b7a4b77b-c87b-4e5b-9b23-f9892f418b7c,"{""period"": 12, ""overbought"": 5, ""oversold"": -5}",2026-02-28 21:58:23.042858
+aeb90a79-fb2d-498b-b85a-8a2936112830,90f64788-daa7-4d55-86b1-37ccfa6d9d94,"{""period"": 50}",2026-02-28 21:58:23.043876
+aeb90a79-fb2d-498b-b85a-8a2936112830,8f1cfe12-046d-4d02-a646-afff93ec7337,"{""k_period"": 14, ""d_period"": 3, ""slowing"": 3, ""overbought"": 80, ""oversold"": 20}",2026-02-28 21:58:23.044870
+aeb90a79-fb2d-498b-b85a-8a2936112830,4be4d655-78a5-4af5-97c8-a1e570f3fadc,"{""atr_period"": 10, ""multiplier"": 3}",2026-02-28 21:58:23.044870
+aeb90a79-fb2d-498b-b85a-8a2936112830,537e0105-9af1-46fd-bfe7-a30834b42530,"{""period"": 14, ""std_dev_multiplier"": 1}",2026-02-28 21:58:23.051318
+aeb90a79-fb2d-498b-b85a-8a2936112830,fee309f6-a1da-4fa3-a5e9-5b4d890e5d35,"{""period"": 14, ""overbought"": -20, ""oversold"": -80}",2026-02-28 21:58:23.065125
+aeb90a79-fb2d-498b-b85a-8a2936112830,c6eb7b6a-7636-494d-8968-a8ce3d1581c4,"{""swing_period"": 20, ""zone_strength"": 3, ""zone_tolerance"": 0.001, ""min_zone_width"": 0.001, ""atr_multiplier"": 1}",2026-02-28 21:58:23.067154
+65185ab5-892e-42e9-92e1-d17456905a52,93652a62-3803-43b9-89d3-ca74cbdf5543,"{""period"": 14}",2026-03-01 00:07:41.918451
+65185ab5-892e-42e9-92e1-d17456905a52,abcdaacc-8163-4f7e-9d04-7da40832ad72,"{""period"": 14}",2026-03-01 00:07:41.923180
+65185ab5-892e-42e9-92e1-d17456905a52,ec9b0228-509c-490b-b3f6-14d56e9402ae,"{""period"": 20, ""std_dev"": 2}",2026-03-01 00:07:41.928749
+65185ab5-892e-42e9-92e1-d17456905a52,c1bae88b-f487-463f-8a9a-6bbc0030c951,"{""period"": 20, ""overbought"": 100, ""oversold"": -100}",2026-03-01 00:07:41.945181
+65185ab5-892e-42e9-92e1-d17456905a52,2880029a-af4b-406a-ae39-552cec1c9153,"{""period"": 20}",2026-03-01 00:07:41.949168
+65185ab5-892e-42e9-92e1-d17456905a52,2f201651-60d7-4933-b0a7-a381abfb1e30,"{""period"": 20}",2026-03-01 00:07:41.953157
+65185ab5-892e-42e9-92e1-d17456905a52,bbe66efd-8e83-4941-82b3-9501ae09b436,"{""lookback"": 50}",2026-03-01 00:07:41.956148
+65185ab5-892e-42e9-92e1-d17456905a52,3ed7556f-d8be-441f-99a4-0df37b582d78,"{""smooth_period"": 2, ""confirmation_candles"": 1}",2026-03-01 00:07:41.964464
+65185ab5-892e-42e9-92e1-d17456905a52,818365dc-335a-4cbf-9e2b-b7533a43eade,"{""tenkan_period"": 9, ""kijun_period"": 26, ""senkou_span_b_period"": 52, ""chikou_shift"": 26}",2026-03-01 00:07:43.082252
+65185ab5-892e-42e9-92e1-d17456905a52,717361e1-0bc7-44b0-ba5a-c033622c62e0,"{""ema_period"": 20, ""atr_period"": 20, ""multiplier"": 2}",2026-03-01 00:07:43.098258
+65185ab5-892e-42e9-92e1-d17456905a52,b78c6a59-5d07-4cd0-a6d9-62e13d83f003,"{""fast_period"": 12, ""slow_period"": 26, ""signal_period"": 9}",2026-03-01 00:07:43.118247
+65185ab5-892e-42e9-92e1-d17456905a52,7256ba5a-003a-48dd-ba07-d8ea71874d1b,"{""period"": 14}",2026-03-01 00:07:43.126375
+65185ab5-892e-42e9-92e1-d17456905a52,a7d6161b-ed29-4e2c-8a42-65e4025a829e,"{""signal_period"": 9}",2026-03-01 00:07:43.130914
+65185ab5-892e-42e9-92e1-d17456905a52,4b283271-d73a-4d8a-8c5c-60ecf656aa17,"{""initial_af"": 0.02, ""max_af"": 0.2, ""step_af"": 0.02}",2026-03-01 00:07:43.150731
+65185ab5-892e-42e9-92e1-d17456905a52,d87a925e-0ad8-42a1-a4c9-8533af656493,"{""pivot_type"": 0, ""support_resistance_buffer"": 0.001}",2026-03-01 00:07:43.174989
+65185ab5-892e-42e9-92e1-d17456905a52,c07803cd-9d2a-488f-878b-f1f4392d1af1,"{""period"": 14, ""overbought"": 70, ""oversold"": 30}",2026-03-01 00:07:43.202323
+65185ab5-892e-42e9-92e1-d17456905a52,b7a4b77b-c87b-4e5b-9b23-f9892f418b7c,"{""period"": 12, ""overbought"": 5, ""oversold"": -5}",2026-03-01 00:07:43.219545
+65185ab5-892e-42e9-92e1-d17456905a52,90f64788-daa7-4d55-86b1-37ccfa6d9d94,"{""period"": 50}",2026-03-01 00:07:43.223078
+65185ab5-892e-42e9-92e1-d17456905a52,8f1cfe12-046d-4d02-a646-afff93ec7337,"{""k_period"": 14, ""d_period"": 3, ""slowing"": 3, ""overbought"": 80, ""oversold"": 20}",2026-03-01 00:07:43.248433
+65185ab5-892e-42e9-92e1-d17456905a52,4be4d655-78a5-4af5-97c8-a1e570f3fadc,"{""atr_period"": 10, ""multiplier"": 3}",2026-03-01 00:07:43.256242
+65185ab5-892e-42e9-92e1-d17456905a52,537e0105-9af1-46fd-bfe7-a30834b42530,"{""period"": 14, ""std_dev_multiplier"": 1}",2026-03-01 00:07:43.266306
+65185ab5-892e-42e9-92e1-d17456905a52,fee309f6-a1da-4fa3-a5e9-5b4d890e5d35,"{""period"": 14, ""overbought"": -20, ""oversold"": -80}",2026-03-01 00:07:43.269295
+65185ab5-892e-42e9-92e1-d17456905a52,c6eb7b6a-7636-494d-8968-a8ce3d1581c4,"{""swing_period"": 20, ""zone_strength"": 3, ""zone_tolerance"": 0.001, ""min_zone_width"": 0.001, ""atr_multiplier"": 1}",2026-03-01 00:07:43.277338

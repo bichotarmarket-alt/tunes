@@ -160,6 +160,14 @@ class AsyncWebSocketClient:
         try:
             await self.websocket.send(message)
             logger.debug(f"Sent message: {message}")
+            
+            # Registrar mensagem enviada no performance monitor (usando função global)
+            try:
+                from services.performance_monitor import record_ws_message_global
+                record_ws_message_global(sent=True)
+                logger.info("[WS TRACK] Mensagem enviada registrada")
+            except Exception as e:
+                logger.error(f"[WS TRACK] ERRO ao registrar mensagem enviada: {e}")
         except Exception as e:
             logger.error(f"Failed to send message: {e}")
             raise WebSocketError(f"Failed to send message: {e}")
@@ -289,6 +297,14 @@ class AsyncWebSocketClient:
     async def _process_message(self, message) -> None:
         """Process incoming WebSocket message"""
         try:
+            # Registrar mensagem recebida no performance monitor (usando função global)
+            try:
+                from services.performance_monitor import record_ws_message_global
+                record_ws_message_global(sent=False)
+                logger.info("[WS TRACK] Mensagem recebida registrada")
+            except Exception as e:
+                logger.error(f"[WS TRACK] ERRO ao registrar mensagem recebida: {e}")
+            
             # Handle bytes messages first
             if isinstance(message, bytes):
                 decoded_message = message.decode("utf-8")

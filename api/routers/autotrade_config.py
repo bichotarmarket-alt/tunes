@@ -32,14 +32,8 @@ async def get_available_timeframes(
     try:
         from services.data_collector.realtime import data_collector
         
-        if not data_collector:
-            return AvailableTimeframesResponse(available_timeframes=[])
-        
-        # Obter buffers de candles
-        available_timeframes = []
-        
-        # Verificar cada timeframe
-        timeframes = [
+        # Lista padrão de todos os timeframes disponíveis na corretora
+        all_timeframes = [
             {"value": 3, "label": "3s"},
             {"value": 5, "label": "5s"},
             {"value": 30, "label": "30s"},
@@ -48,29 +42,52 @@ async def get_available_timeframes(
             {"value": 900, "label": "15min"},
             {"value": 3600, "label": "1h"},
             {"value": 14400, "label": "4h"},
-            {"value": 86400, "label": "daily"}
         ]
         
-        for timeframe in timeframes:
+        if not data_collector:
+            # Se data_collector não está disponível, retorna todos os timeframes
+            # para permitir que o usuário possa configurar mesmo sem dados ainda
+            logger.warning("Data collector não disponível, retornando todos os timeframes padrão")
+            return AvailableTimeframesResponse(available_timeframes=all_timeframes)
+        
+        # Verificar cada timeframe
+        available_timeframes = []
+        
+        for timeframe in all_timeframes:
             # Verificar se há dados suficientes para este timeframe
             has_sufficient_data = False
             
             # Verificar buffers de todos os ativos
-            if data_collector._candle_buffers:
+            if hasattr(data_collector, '_candle_buffers') and data_collector._candle_buffers:
                 for asset, buffers in data_collector._candle_buffers.items():
                     buffer = buffers.get(timeframe["value"], [])
                     if len(buffer) >= 20:  # Mínimo de 20 candles
                         has_sufficient_data = True
                         break
             
-            if has_sufficient_data:
+            # 🚨 CORREÇÃO: Incluir timeframe se tiver dados OU se for um timeframe padrão
+            # Os timeframes 3s, 5s, 30s, 60s, 300s, 900s, 3600s e 14400s sempre estão disponíveis
+            # na PocketOption, mesmo que ainda não tenhamos dados coletados
+            is_common_timeframe = timeframe["value"] in [3, 5, 30, 60, 300, 900, 3600, 14400]
+            
+            if has_sufficient_data or is_common_timeframe:
                 available_timeframes.append(timeframe)
         
         return AvailableTimeframesResponse(available_timeframes=available_timeframes)
         
     except Exception as e:
         logger.error(f"Erro ao obter timeframes disponíveis: {e}")
-        return AvailableTimeframesResponse(available_timeframes=[])
+        # 🚨 CORREÇÃO: Em caso de erro, retornar os timeframes padrão para não bloquear o usuário
+        fallback_timeframes = [
+            {"value": 3, "label": "3s"},
+            {"value": 5, "label": "5s"},
+            {"value": 30, "label": "30s"},
+            {"value": 60, "label": "1min"},
+            {"value": 300, "label": "5min"},
+            {"value": 900, "label": "15min"},
+            {"value": 3600, "label": "1h"},
+        ]
+        return AvailableTimeframesResponse(available_timeframes=fallback_timeframes)
 
 
 @router.post("", response_model=AutoTradeConfigResponse)

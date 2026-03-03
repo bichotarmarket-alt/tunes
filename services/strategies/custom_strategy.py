@@ -91,6 +91,13 @@ class CustomStrategy(BaseStrategy):
         for indicator_info in self.indicators:
             indicator_type = indicator_info.get('type')
             indicator_params = indicator_info.get('parameters', {})
+            # Fix: converter JSON string para dict se necessário
+            if isinstance(indicator_params, str):
+                try:
+                    import json
+                    indicator_params = json.loads(indicator_params)
+                except:
+                    indicator_params = {}
             indicator_name = indicator_info.get('name')
             
             logger.debug(f"🔍 [USUÁRIO: {self.user_name}] [ATIVO: {symbol}] Analisando indicador: {indicator_type}")
@@ -366,6 +373,8 @@ class CustomStrategy(BaseStrategy):
                 'pivot_points': 'services.analysis.indicators.pivot_points.PivotPoints',
                 'supertrend': 'services.analysis.indicators.supertrend.Supertrend',
                 'fibonacci_retracement': 'services.analysis.indicators.fibonacci_retracement.FibonacciRetracement',
+                'vwap': 'services.analysis.indicators.vwap.VWAP',
+                'obv': 'services.analysis.indicators.obv.OBV',
             }
 
             module_path = indicator_map.get(indicator_type)

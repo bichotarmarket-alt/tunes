@@ -13,6 +13,7 @@ interface ConnectionContextType {
   lastChecked: Date | null;
   checkConnection: () => Promise<void>;
   errorType: ConnectionErrorType;
+  connectionRestoredAt: Date | null;
 }
 
 const ConnectionContext = createContext<ConnectionContextType | undefined>(undefined);
@@ -38,34 +39,42 @@ export const ConnectionProvider: React.FC<ConnectionProviderProps> = ({ children
   const { isConnected: wsConnected, isHealthy } = useHealthWebSocket();
   const lastHealthCheckRef = useRef<number>(0);
   const HEALTH_CHECK_INTERVAL = 30000; // 30 segundos (reduzido de 5 segundos)
+  const [connectionRestoredAt, setConnectionRestoredAt] = useState<Date | null>(null);
   const [isAppInBackground, setIsAppInBackground] = useState(false);
+  const prevConnectionStatusRef = useRef<ConnectionStatus>('checking');
 
   const checkConnection = useCallback(async () => {
     try {
       setConnectionStatus('checking');
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-      // Primeiro, verificar se há internet tentando conectar a um serviço confiável
+      // Verificar internet com controller separado para cada tentativa
       let currentHasInternet = false;
+      
+      // Tentativa 1: Google
       try {
         console.log('[ConnectionContext] Verificando internet (Google)...');
+        const controller1 = new AbortController();
+        const timeoutId1 = setTimeout(() => controller1.abort(), 3000);
         const internetCheck = await fetch('https://www.google.com/generate_204', {
-          signal: controller.signal,
+          signal: controller1.signal,
           cache: 'no-store',
         });
+        clearTimeout(timeoutId1);
         currentHasInternet = internetCheck.ok;
         setHasInternet(currentHasInternet);
         console.log('[ConnectionContext] Internet check (Google):', currentHasInternet);
       } catch (internetError) {
         console.log('[ConnectionContext] Google falhou, tentando Cloudflare...');
-        // Se falhar ao conectar ao Google, verificar Cloudflare
+        
+        // Tentativa 2: Cloudflare (com NOVO controller)
         try {
+          const controller2 = new AbortController();
+          const timeoutId2 = setTimeout(() => controller2.abort(), 3000);
           const cloudflareCheck = await fetch('https://cloudflare.com/cdn-cgi/trace', {
-            signal: controller.signal,
+            signal: controller2.signal,
             cache: 'no-store',
           });
+          clearTimeout(timeoutId2);
           currentHasInternet = cloudflareCheck.ok;
           setHasInternet(currentHasInternet);
           console.log('[ConnectionContext] Internet check (Cloudflare):', currentHasInternet);
@@ -77,6 +86,10 @@ export const ConnectionProvider: React.FC<ConnectionProviderProps> = ({ children
       }
 
       console.log('[ConnectionContext] hasInternet:', currentHasInternet);
+
+      // Controller para verificação do backend
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
 
       // Se não houver internet, não tentar verificar o backend
       if (!currentHasInternet) {
@@ -209,6 +222,21 @@ export const ConnectionProvider: React.FC<ConnectionProviderProps> = ({ children
     }
   }, []);
 
+  // Monitorar quando a conexão é restaurada (de disconnected para connected)
+  useEffect(() => {
+    const prevStatus = prevConnectionStatusRef.current;
+    const currentStatus = connectionStatus;
+    
+    // Se estava desconectado e agora está conectado
+    if (prevStatus === 'disconnected' && currentStatus === 'connected') {
+      console.log('[ConnectionContext] Conexão restaurada! Notificando telas...');
+      setConnectionRestoredAt(new Date());
+    }
+    
+    // Atualizar ref para próxima comparação
+    prevConnectionStatusRef.current = currentStatus;
+  }, [connectionStatus]);
+
   // Monitorar status de health via WebSocket
   useEffect(() => {
     if (wsConnected && isHealthy !== null) {
@@ -312,7 +340,7 @@ export const ConnectionProvider: React.FC<ConnectionProviderProps> = ({ children
   const isOnline = connectionStatus === 'connected';
 
   return (
-    <ConnectionContext.Provider value={{ connectionStatus, isOnline, lastChecked, checkConnection, errorType }}>
+    <ConnectionContext.Provider value={{ connectionStatus, isOnline, lastChecked, checkConnection, errorType, connectionRestoredAt }}>
       {children}
     </ConnectionContext.Provider>
   );

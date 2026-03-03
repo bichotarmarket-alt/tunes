@@ -6,7 +6,7 @@ from loguru import logger
 from sqlalchemy.exc import OperationalError
 
 
-def retry_on_db_lock(max_retries: int = 3, retry_delay: float = 1.0, timeout: float = 10.0):
+def retry_on_db_lock(max_retries: int = 3, retry_delay: float = 2.0, timeout: float = 30.0):
     """
     Decorator para retry operações de banco de dados com timeout
     

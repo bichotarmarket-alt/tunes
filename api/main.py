@@ -289,16 +289,43 @@ async def lifespan(app: FastAPI):
 
         asyncio.create_task(vip_cleanup_loop())
         logger.info("VIP cleanup job started (runs every hour)")
+        
+        # Start aggregation job in background (runs every 5 minutes)
+        async def aggregation_job_loop():
+            while True:
+                try:
+                    from services.aggregation_job import aggregation_job
+                    from core.database import get_db
+                    
+                    async for db in get_db():
+                        aggregation_job.db = db  # Atribuir DB à instância global
+                        await aggregation_job.run_once()
+                        break
+                except Exception as e:
+                    logger.error(f"Aggregation job error: {e}")
+                await asyncio.sleep(300)  # 5 minutes
+        
+        asyncio.create_task(aggregation_job_loop())
+        logger.info("Aggregation job started (runs every 5 minutes)")
     except Exception as e:
         logger.error(f"Failed to start data collector service: {e}")
         # Don't raise - allow app to start even if data collector fails
     
-    # Start ngrok if enabled
+    # Start performance monitor
     try:
-        from scripts.start_ngrok import start_ngrok_if_enabled
-        start_ngrok_if_enabled()
+        from services.performance_monitor import performance_monitor
+        await performance_monitor.start()
+        logger.info("[OK] Performance monitor started")
     except Exception as e:
-        logger.warning(f"Failed to start ngrok: {e}")
+        logger.error(f"[ERROR] Failed to start performance monitor: {e}")
+    
+    # Start aggregation job
+    try:
+        from services.aggregation_job import aggregation_job
+        await aggregation_job.start()
+        logger.info("[OK] Aggregation job started")
+    except Exception as e:
+        logger.error(f"[ERROR] Failed to start aggregation job: {e}")
     
     logger.info("Application started successfully")
     
@@ -306,13 +333,6 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     logger.info("Shutting down application...")
-    
-    # Stop ngrok if it was started
-    try:
-        from scripts.start_ngrok import stop_ngrok
-        stop_ngrok()
-    except Exception as e:
-        logger.warning(f"Failed to stop ngrok: {e}")
     
     # Stop data collector service
     try:
@@ -423,6 +443,29 @@ async def log_requests(request: Request, call_next):
     return response
 
 
+@app.middleware("http")
+async def performance_metrics_middleware(request: Request, call_next):
+    """Capturar métricas de performance para o dashboard"""
+    from services.performance_monitor import performance_monitor
+    import time
+    
+    start_time = time.time()
+    
+    try:
+        response = await call_next(request)
+        latency_ms = (time.time() - start_time) * 1000
+        
+        # Registrar requisição bem-sucedida (status 2xx ou 3xx)
+        success = 200 <= response.status_code < 400
+        performance_monitor.record_request(latency_ms=latency_ms, success=success)
+        
+        return response
+    except Exception as e:
+        latency_ms = (time.time() - start_time) * 1000
+        performance_monitor.record_request(latency_ms=latency_ms, success=False)
+        raise
+
+
 # ==================== HEALTH CHECK ====================
 
 @app.get("/health", response_model=HealthResponse, tags=["Health"])
@@ -488,6 +531,14 @@ async def startup_event():
 async def shutdown_event():
     """Shutdown event"""
     logger.info("Application shutdown event")
+    
+    # Stop aggregation job
+    try:
+        from services.aggregation_job import aggregation_job
+        await aggregation_job.stop()
+        logger.info("Aggregation job stopped")
+    except Exception as e:
+        logger.warning(f"Failed to stop aggregation job: {e}")
 
 
 if __name__ == "__main__":

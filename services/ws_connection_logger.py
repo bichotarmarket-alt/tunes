@@ -13,9 +13,10 @@ from loguru import logger
 class WSConnectionLogger:
     """Logger dedicado para cada conexão WebSocket"""
     
-    def __init__(self, connection_id: str, connection_type: str, log_dir: str = "logs/ws", rotation_lines: Optional[int] = None):
+    def __init__(self, connection_id: str, connection_type: str, log_dir: str = "logs/ws", rotation_lines: Optional[int] = None, user_name: Optional[str] = None):
         self.connection_id = connection_id
         self.connection_type = connection_type
+        self.user_name = user_name or "Unknown"
         self.log_dir = Path(log_dir)
         self.log_file: Optional[Path] = None
         self._file_handle: Optional[Any] = None
@@ -48,10 +49,11 @@ class WSConnectionLogger:
         
         # Verificar se já existe um arquivo de log para este base_id
         existing_file = None
+        safe_user = self.user_name.replace("/", "_").replace(":", "_").replace(" ", "_")
         if self.log_dir.exists():
-            # Procurar arquivos que correspondam ao padrão {connection_type}_{safe_base_id}_*.log
+            # Procurar arquivos que correspondam ao padrão {user_name}_{connection_type}_{safe_base_id}_*.log
             # Mas ignorar arquivos já rotacionados (que contêm _rotated_ no nome)
-            pattern = f"{self.connection_type}_{safe_base_id}_*.log"
+            pattern = f"{safe_user}_{self.connection_type}_{safe_base_id}_*.log"
             matching_files = [
                 f for f in self.log_dir.glob(pattern)
                 if '_rotated_' not in f.name
@@ -79,7 +81,7 @@ Session Started: {self.stats['created_at']}
         else:
             # Criar novo arquivo de log
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"{self.connection_type}_{safe_base_id}_{timestamp}.log"
+            filename = f"{safe_user}_{self.connection_type}_{safe_base_id}_{timestamp}.log"
             self.log_file = self.log_dir / filename
             
             # Criar cabeçalho do log
@@ -87,6 +89,7 @@ Session Started: {self.stats['created_at']}
 WebSocket Connection Log
 Connection ID: {self.connection_id}
 Connection Type: {self.connection_type}
+User: {self.user_name}
 Created: {self.stats['created_at']}
 Log File: {self.log_file.name}
 {'='*80}
@@ -258,7 +261,7 @@ Closed At: {datetime.now().isoformat()}
 _connection_loggers: Dict[str, WSConnectionLogger] = {}
 
 
-def get_connection_logger(connection_id: str, connection_type: str = "ws", rotation_lines: Optional[int] = None) -> WSConnectionLogger:
+def get_connection_logger(connection_id: str, connection_type: str = "ws", rotation_lines: Optional[int] = None, user_name: Optional[str] = None) -> WSConnectionLogger:
     """Obter ou criar logger para uma conexão - reutiliza se já existir"""
     # Verificar se já existe um logger para esta conexão (mesmo prefixo de ID)
     # Extrair o ID base (sem timestamp) para reutilizar
@@ -270,7 +273,7 @@ def get_connection_logger(connection_id: str, connection_type: str = "ws", rotat
             return logger
     
     # Criar novo logger se não encontrar (com rotação opcional)
-    _connection_loggers[connection_id] = WSConnectionLogger(connection_id, connection_type, rotation_lines=rotation_lines)
+    _connection_loggers[connection_id] = WSConnectionLogger(connection_id, connection_type, rotation_lines=rotation_lines, user_name=user_name)
     return _connection_loggers[connection_id]
 
 

@@ -378,8 +378,9 @@ class TelegramNotificationService:
                 "parse_mode": "HTML"
             }
 
-            response = httpx.post(url, json=data, timeout=10.0)
-            response.raise_for_status()
+            async with httpx.AsyncClient() as client:
+                response = await client.post(url, json=data, timeout=10.0)
+                response.raise_for_status()
             return True
         except Exception as e:
             logger.error(f"Erro ao enviar notificação: {e}")
@@ -459,8 +460,9 @@ class TelegramNotificationService:
                 "parse_mode": "HTML"
             }
 
-            response = httpx.post(url, json=data, timeout=10.0)
-            response.raise_for_status()
+            async with httpx.AsyncClient() as client:
+                response = await client.post(url, json=data, timeout=10.0)
+                response.raise_for_status()
             return True
         except Exception as e:
             logger.error(f"Erro ao enviar notificação de resultado: {e}")

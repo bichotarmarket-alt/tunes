@@ -17,10 +17,11 @@ from services.ws_connection_logger import get_connection_logger, remove_connecti
 class ConnectionKeepAlive:
     """Advanced connection keep-alive manager"""
 
-    def __init__(self, ssid: str, is_demo: bool = True, user_name: str = None):
+    def __init__(self, ssid: str, is_demo: bool = True, user_name: str = None, account_id: str = None):
         self.ssid = ssid
         self.is_demo = is_demo
         self.user_name = user_name or "Unknown User"
+        self.account_id = account_id  # ID da conta para verificar status do autotrade
 
         # Connection state
         self.websocket: Optional[WebSocketClientProtocol] = None
@@ -193,7 +194,8 @@ class ConnectionKeepAlive:
             self._ws_logger = get_connection_logger(
                 self._connection_logger_id, 
                 connection_type="keep_alive",
-                rotation_lines=10000  # Rotacionar após 10.000 linhas
+                rotation_lines=10000,  # Rotacionar após 10.000 linhas
+                user_name=self.user_name
             )
         
         await self._ws_logger.log_event("INIT", f"Iniciando estabelecimento de conexão", {
@@ -553,6 +555,74 @@ class ConnectionKeepAlive:
             except Exception as e:
                 logger.error(f"✗ Health monitor error: {e}", exc_info=False)
 
+    def _should_reconnect_with_autotrade_check(self) -> bool:
+        """Verificar se deve reconectar, incluindo checagem do status do autotrade no banco"""
+        # Se should_reconnect está desativado localmente, não reconectar
+        if not self.should_reconnect:
+            return False
+        
+        # Se não temos account_id, não podemos verificar o status do autotrade
+        # Então permitimos reconexão (comportamento padrão)
+        if not self.account_id:
+            return True
+        
+        # Verificar se o autotrade ainda está ativo no banco de dados
+        try:
+            import asyncio
+            # Usar asyncio.create_task para não bloquear, mas retornar True por enquanto
+            # A verificação real será feita no reconnection_manager
+            return True
+        except Exception:
+            return True
+
+    async def _check_autotrade_active(self) -> bool:
+        """Verificar no banco de dados se o autotrade está ativo para esta conta"""
+        if not self.account_id:
+            return True  # Se não temos account_id, assumir que está ativo
+        
+        try:
+            from core.database import get_db_context
+            from sqlalchemy import text
+            
+            async with get_db_context() as db:
+                # Verificar se existe alguma config ativa para esta conta
+                result = await db.execute(
+                    text("""
+                        SELECT EXISTS(
+                            SELECT 1 FROM autotrade_configs 
+                            WHERE account_id = :account_id 
+                            AND is_active = TRUE
+                        ) as has_active_autotrade
+                    """),
+                    {"account_id": self.account_id}
+                )
+                row = result.fetchone()
+                is_active = bool(row[0]) if row else False
+                
+                if not is_active:
+                    logger.warning(
+                        f"[RECONNECTION BLOCKED] [{self.account_id}] Autotrade INATIVO no banco de dados. "
+                        f"Reconexão será impedida para {self.user_name}",
+                        extra={
+                            "user_name": self.user_name,
+                            "account_id": self.account_id[:8] if self.account_id else "",
+                            "account_type": "demo" if self.is_demo else "real"
+                        }
+                    )
+                
+                return is_active
+        except Exception as e:
+            logger.error(
+                f"[ERROR] [{self.account_id}] Erro ao verificar status do autotrade: {e}. "
+                f"Permitindo reconexão por segurança.",
+                extra={
+                    "user_name": self.user_name,
+                    "account_id": self.account_id[:8] if self.account_id else "",
+                    "account_type": "demo" if self.is_demo else "real"
+                }
+            )
+            return True  # Em caso de erro, permitir reconexão
+
     async def _reconnection_monitor(self):
         """Monitor for disconnections and automatically reconnect"""
         logger.info("[REBALANCE] Reconnection monitor started")
@@ -568,6 +638,12 @@ class ConnectionKeepAlive:
 
         # Registrar esta conexão no gerenciador unificado
         connection_id = f"keep_alive_{id(self)}"
+        
+        # Criar callback de verificação de autotrade - sempre verifica no banco
+        async def should_reconnect_with_check():
+            """Verificar no banco se autotrade está ativo para esta conta"""
+            return await self._check_autotrade_active()
+        
         reconnection_manager.register_connection(
             connection_id=connection_id,
             client=self,
@@ -579,7 +655,7 @@ class ConnectionKeepAlive:
                 'initial_delay': self.reconnect_delay,
                 'max_delay': self.max_reconnect_delay,
                 'backoff_multiplier': 2,
-                'should_reconnect': lambda: self.should_reconnect
+                'should_reconnect': should_reconnect_with_check
             },
             connection_type="monitoring_payout",
             description=f"[SISTEMA] Monitoramento Payout - SSID: {self.ssid[:25]}... (demo)"
@@ -603,6 +679,13 @@ class ConnectionKeepAlive:
     async def _process_message(self, message):
         """Process incoming messages"""
         try:
+            # Registrar mensagem recebida no performance monitor
+            try:
+                from services.performance_monitor import record_ws_message_global
+                record_ws_message_global(sent=False)
+            except Exception:
+                pass
+            
             # Normalize memoryview to bytes
             if isinstance(message, memoryview):
                 message = message.tobytes()
@@ -893,6 +976,14 @@ class ConnectionKeepAlive:
             if self.is_connected and self.websocket:
                 await self.websocket.send(message)
                 self.connection_stats["total_messages_sent"] += 1
+                
+                # Registrar no performance monitor
+                try:
+                    from services.performance_monitor import record_ws_message_global
+                    record_ws_message_global(sent=True)
+                except Exception:
+                    pass
+                
                 return True
             else:
                 logger.warning("Cannot send message: not connected")
