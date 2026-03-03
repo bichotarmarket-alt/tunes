@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 async def seed_admin_user():
-    """Criar usuário admin padrão"""
+    """Criar usuário admin padrão e retornar ID"""
     async with get_db_context() as db:
         # Verificar se admin já existe
         result = await db.execute(
@@ -22,7 +22,7 @@ async def seed_admin_user():
         
         if existing:
             logger.info("Usuário admin já existe")
-            return
+            return existing.id
         
         # Criar admin
         admin = User(
@@ -38,9 +38,10 @@ async def seed_admin_user():
         db.add(admin)
         await db.commit()
         logger.info("✅ Usuário admin criado: admin@gmail.com")
+        return admin.id
 
 
-async def seed_strategies():
+async def seed_strategies(admin_user_id: str):
     """Criar strategies padrão do sistema"""
     async with get_db_context() as db:
         strategies_data = [
@@ -49,9 +50,6 @@ async def seed_strategies():
                 "description": "Estratégia de confluência multi-indicadores",
                 "type": "confluence",
                 "is_active": True,
-                "user_id": "system",
-                "account_id": "system",
-                "assets": [],
                 "parameters": {
                     "rsi_period": 14,
                     "rsi_overbought": 70,
@@ -176,9 +174,9 @@ async def seed_strategies():
                 description=strategy_data["description"],
                 type=strategy_data["type"],
                 is_active=strategy_data["is_active"],
-                user_id=strategy_data["user_id"],
-                account_id=strategy_data["account_id"],
-                assets=strategy_data["assets"],
+                user_id=admin_user_id,
+                account_id=admin_user_id,
+                assets=[],
                 parameters=strategy_data["parameters"],
                 created_at=datetime.utcnow()
             )
@@ -194,8 +192,9 @@ async def run_seed():
     logger.info("🌱 Iniciando seed de dados...")
     
     try:
-        await seed_admin_user()
-        await seed_strategies()
+        # Criar/obter admin e usar seu ID para strategies
+        admin_id = await seed_admin_user()
+        await seed_strategies(admin_id)
         logger.info("✅ Seed concluído com sucesso!")
     except Exception as e:
         logger.error(f"❌ Erro durante seed: {e}")
