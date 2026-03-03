@@ -429,6 +429,7 @@ class AutoTradeConfigResponse(BaseModel):
     cooldown_seconds: str = '0'
     min_confidence: float = 0.7
     trade_timing: str = 'on_signal'
+    execute_all_signals: bool = False
     all_win_percentage: float = 0.0
     highest_balance: Optional[float] = None
     # Redução Inteligente
@@ -460,6 +461,7 @@ class AutoTradeConfigCreate(BaseModel):
     cooldown_seconds: str = '0'
     min_confidence: float = 0.7
     trade_timing: str = 'on_signal'
+    execute_all_signals: bool = False
     all_win_percentage: float = 0.0
     highest_balance: Optional[float] = None
     is_active: bool = True
@@ -497,6 +499,7 @@ class AutoTradeConfigUpdate(BaseModel):
     cooldown_seconds: Optional[str] = None
     min_confidence: Optional[float] = None
     trade_timing: Optional[str] = None
+    execute_all_signals: Optional[bool] = None
     all_win_percentage: Optional[float] = None
     highest_balance: Optional[float] = None
     is_active: Optional[bool] = None
