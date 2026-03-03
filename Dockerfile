@@ -1,27 +1,29 @@
 FROM python:3.11-slim
 
+# Set working directory
 WORKDIR /app
 
-# Instalar dependências do sistema
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
     libpq-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copiar requirements
+# Copy requirements
 COPY requirements.txt .
 
-# Instalar dependências Python
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copiar código
+# Copy application
 COPY . .
 
-# Criar diretório de logs
+# Create logs directory
 RUN mkdir -p logs
 
-# Expor porta
+# Expose port
 EXPOSE 8000
 
-# Comando para iniciar
-CMD ["python", "run.py"]
+# Run init database and start application
+CMD python init_database.py && uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1
