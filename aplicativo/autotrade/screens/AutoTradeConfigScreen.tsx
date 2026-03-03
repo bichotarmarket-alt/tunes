@@ -27,6 +27,7 @@ interface AutoTradeConfigData {
   min_confidence: number;
   cooldown_seconds: number | string;
   trade_timing: 'on_signal' | 'on_candle_close';
+  execute_all_signals?: boolean;
   // Redução Inteligente
   smart_reduction_enabled?: boolean;
   smart_reduction_loss_trigger?: number;
@@ -62,6 +63,7 @@ export default function AutoTradeConfigScreen() {
     min_confidence: 0.7,
     cooldown_seconds: 0,
     trade_timing: 'on_signal',
+    execute_all_signals: false,
     // Redução Inteligente
     smart_reduction_enabled: false,
     smart_reduction_loss_trigger: 3,
@@ -164,6 +166,7 @@ export default function AutoTradeConfigScreen() {
                     min_confidence: legacyConfig.min_confidence,
                     cooldown_seconds: legacyConfig.cooldown_seconds || 0,
                     trade_timing: legacyConfig.trade_timing || 'on_signal',
+                    execute_all_signals: legacyConfig.execute_all_signals ?? false,
                     // Redução Inteligente
                     smart_reduction_enabled: legacyConfig.smart_reduction_enabled ?? false,
                     smart_reduction_loss_trigger: legacyConfig.smart_reduction_loss_trigger || 3,
@@ -212,6 +215,7 @@ export default function AutoTradeConfigScreen() {
                 min_confidence: existingConfig.min_confidence,
                 cooldown_seconds: existingConfig.cooldown_seconds || 0,
                 trade_timing: existingConfig.trade_timing || 'on_signal',
+                execute_all_signals: existingConfig.execute_all_signals ?? false,
                 // Redução Inteligente
                 smart_reduction_enabled: existingConfig.smart_reduction_enabled ?? false,
                 smart_reduction_loss_trigger: existingConfig.smart_reduction_loss_trigger || 3,
@@ -523,6 +527,23 @@ export default function AutoTradeConfigScreen() {
                   No Sinal: Executa imediatamente ao receber o sinal
                   No Fechamento da Vela: Aguarda o fechamento da vela para executar
                 </Text>
+              </View>
+
+              {/* Executar Todos Sinais */}
+              <View style={styles.toggleRow}>
+                <View style={styles.toggleText}>
+                  <Text style={styles.label}>Executar todos Sinais</Text>
+                  <Text style={styles.hint}>
+                    Quando ativado, executa todos os sinais recebidos independente de outros filtros.
+                  </Text>
+                </View>
+                <Switch
+                  value={config.execute_all_signals}
+                  onValueChange={(value) => setConfig({ ...config, execute_all_signals: value })}
+                  trackColor={{ false: '#1C1F2A', true: '#7DD3FC' }}
+                  thumbColor={config.execute_all_signals ? '#0F172A' : '#94A3B8'}
+                  ios_backgroundColor="#1C1F2A"
+                />
               </View>
             </View>
           )}

@@ -339,6 +339,7 @@ class AutoTradeConfig(Base):
     min_confidence = Column(Float, nullable=False, default=0.7)  # Confiança mínima para executar trade
     cooldown_seconds = Column(String, nullable=True, default='0')  # Tempo mínimo entre operações (em segundos). Formato: "X" (fixo) ou "X-X" (randomizado, ex: "5-10")
     trade_timing = Column(String, nullable=False, default='on_signal')  # 'on_signal' ou 'on_candle_close'
+    execute_all_signals = Column(Boolean, default=False)  # Executar todos os sinais, ignorando bloqueio de operações simultâneas
     all_win_percentage = Column(Float, nullable=False, default=0.0)  # Porcentagem da banca para ativar All-win (0 = desativado)
     highest_balance = Column(Float, nullable=True, default=None)  # Saldo mais alto alcançado (para cálculo do all-win)
     initial_balance = Column(Float, nullable=True, default=None)  # Saldo inicial quando a estratégia foi ligada pela primeira vez

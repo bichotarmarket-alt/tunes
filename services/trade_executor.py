@@ -1067,7 +1067,9 @@ class TradeExecutor:
                 
                 async with self._asset_locks[asset_lock_key]:
                     # Verificar novamente dentro do lock (double-check)
-                    if not await self._check_no_active_trades(account.id, symbol):
+                    # Se execute_all_signals estiver ativo, ignorar bloqueio de trades simultâneos
+                    execute_all_signals = getattr(autotrade_config, 'execute_all_signals', False)
+                    if not await self._check_no_active_trades(account.id, symbol, execute_all_signals=execute_all_signals):
                         logger.warning(f"[TradeExecutor] [{account.name}] 🔒 LOCK: Trade bloqueado - já existe trade ativo no ativo {symbol}")
                         return None
                     
@@ -1973,13 +1975,24 @@ class TradeExecutor:
                 exc_info=True
             )
 
-    async def _check_no_active_trades(self, account_id: str, symbol: Optional[str] = None) -> bool:
+    async def _check_no_active_trades(
+        self, 
+        account_id: str, 
+        symbol: Optional[str] = None,
+        execute_all_signals: bool = False
+    ) -> bool:
         """Verificar se não há trades ativos para garantir funcionamento correto do soros/martingale
         
         Args:
             account_id: ID da conta
             symbol: Símbolo do ativo (opcional) - se fornecido, verifica se há trades ativos especificamente para este ativo
+            execute_all_signals: Se True, ignora o bloqueio e permite múltiplas operações simultâneas
         """
+        # Se execute_all_signals estiver ativo, ignorar verificação de trades ativos
+        if execute_all_signals:
+            logger.info(f"[TradeExecutor] 🚀 EXECUTAR TODOS SINAIS ativo - ignorando bloqueio de trades simultâneos para {account_id[:8]}...")
+            return True
+        
         async with get_db_context() as db:
             # Construir query base
             query = select(Trade).where(
