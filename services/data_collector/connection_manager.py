@@ -146,21 +146,15 @@ class UserConnection:
         try:
             from models import Trade, TradeStatus
             async with get_db_context() as db:
-                result = await db.execute(
-                    text("""
-                        SELECT COUNT(*) as active_count 
-                        FROM trades 
-                        WHERE account_id = :account_id 
-                        AND connection_type = :connection_type
-                        AND status IN ('pending', 'active')
-                    """),
-                    {
-                        "account_id": self.account_id,
-                        "connection_type": self.connection_type
-                    }
+                # Usar SQLAlchemy ORM em vez de SQL raw para compatibilidade com enum
+                from sqlalchemy import select, func
+                stmt = select(func.count()).select_from(Trade).where(
+                    Trade.account_id == self.account_id,
+                    Trade.connection_type == self.connection_type,
+                    Trade.status.in_([TradeStatus.PENDING, TradeStatus.ACTIVE])
                 )
-                row = result.fetchone()
-                active_count = row[0] if row else 0
+                result = await db.execute(stmt)
+                active_count = result.scalar() or 0
                 
                 if active_count > 0:
                     logger.info(

@@ -5,24 +5,36 @@ Usa a variável de ambiente PORT corretamente
 """
 import os
 import sys
-import subprocess
+import uvicorn
+from api.main import app
+from core.config import settings
+import sys
+import os
+from dotenv import load_dotenv
 
 def main():
-    # Obter PORT das variáveis de ambiente do Railway
-    port = os.environ.get('PORT', '8000')
+    # Carregar variáveis de ambiente do .env
+    load_dotenv()
     
-    print(f"🚀 Starting server on port {port}")
+    print("=" * 60)
+    print("Iniciando Backend AutoTrade - Railway")
+    print("=" * 60)
+    print(f"API Host: {settings.API_HOST}")
     
-    # Executar uvicorn com o port correto
-    cmd = [
-        sys.executable, '-m', 'uvicorn',
-        'api.main:app',
-        '--host', '0.0.0.0',
-        '--port', port,
-        '--workers', '1'
-    ]
+    # Usar PORT do Railway se disponível, senão usar API_PORT
+    port = int(os.getenv("PORT", settings.API_PORT))
+    print(f"API Port: {port}")
+    print(f"Debug Mode: {settings.DEBUG}")
+    print("=" * 60)
     
-    subprocess.run(cmd)
+    uvicorn.run(
+        app,
+        host=settings.API_HOST,
+        port=port,
+        reload=False,  # Railway não usa reload
+        access_log=settings.LOG_LEVEL.upper() == "DEBUG",
+        log_level=settings.LOG_LEVEL.lower(),
+    )
 
 if __name__ == '__main__':
     main()

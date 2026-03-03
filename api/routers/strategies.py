@@ -566,7 +566,7 @@ async def update_strategy(
             # Invalidar cache de configs no data_collector
             from services.data_collector.realtime import data_collector
             if data_collector:
-                data_collector.invalidate_autotrade_configs_cache()
+                await data_collector.invalidate_autotrade_configs_cache()
                 logger.info(f"✓ Cache de configs invalidado após alteração de is_active")
     
     if strategy_update.parameters is not None:
@@ -607,7 +607,7 @@ async def update_strategy(
         # Invalidar cache de configs no data_collector
         from services.data_collector.realtime import data_collector
         if data_collector:
-            data_collector.invalidate_autotrade_configs_cache()
+            await data_collector.invalidate_autotrade_configs_cache()
             logger.info("✓ Cache de configs invalidado após alteração de parâmetros/indicadores")
 
     return await _build_strategy_response(strategy, db)
