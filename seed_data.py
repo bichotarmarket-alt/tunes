@@ -134,6 +134,9 @@ async def seed_strategies():
                 "description": "Squeeze de volatilidade (Bollinger + Keltner)",
                 "type": "volatility_squeeze",
                 "is_active": True,
+                "user_id": "system",
+                "account_id": "system",
+                "assets": [],
                 "parameters": {
                     "bb_period": 20,
                     "bb_std": 2.0,
@@ -146,6 +149,9 @@ async def seed_strategies():
                 "description": "Análise de perfil de volume",
                 "type": "volume_profile",
                 "is_active": True,
+                "user_id": "system",
+                "account_id": "system",
+                "assets": [],
                 "parameters": {
                     "lookback": 20,
                     "volume_threshold": 1.5
