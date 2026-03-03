@@ -76,6 +76,14 @@ export default function AutoTradeConfigScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confidenceText, setConfidenceText] = useState(config.min_confidence.toString());
+  // Estados de texto para campos numéricos (permitem digitar sem resetar para 0)
+  const [amountText, setAmountText] = useState(config.amount.toString());
+  const [stop1Text, setStop1Text] = useState(config.stop1.toString());
+  const [stop2Text, setStop2Text] = useState(config.stop2.toString());
+  const [stopAmountWinText, setStopAmountWinText] = useState(config.stop_amount_win.toString());
+  const [stopAmountLossText, setStopAmountLossText] = useState(config.stop_amount_loss.toString());
+  const [sorosText, setSorosText] = useState(config.soros.toString());
+  const [martingaleText, setMartingaleText] = useState(config.martingale.toString());
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertConfig, setAlertConfig] = useState<{ title: string; message: string; type?: 'success' | 'error' | 'warning' | 'info'; buttons?: Array<{ text: string; onPress?: () => void; style?: 'default' | 'cancel' | 'destructive' }> } | null>(null);
   const [stopsExpanded, setStopsExpanded] = useState(false);
@@ -89,6 +97,35 @@ export default function AutoTradeConfigScreen() {
   useEffect(() => {
     setConfidenceText(config.min_confidence.toString());
   }, [config.min_confidence]);
+
+  // Atualizar estados de texto quando config muda
+  useEffect(() => {
+    setAmountText(config.amount.toString());
+  }, [config.amount]);
+
+  useEffect(() => {
+    setStop1Text(config.stop1.toString());
+  }, [config.stop1]);
+
+  useEffect(() => {
+    setStop2Text(config.stop2.toString());
+  }, [config.stop2]);
+
+  useEffect(() => {
+    setStopAmountWinText(config.stop_amount_win.toString());
+  }, [config.stop_amount_win]);
+
+  useEffect(() => {
+    setStopAmountLossText(config.stop_amount_loss.toString());
+  }, [config.stop_amount_loss]);
+
+  useEffect(() => {
+    setSorosText(config.soros.toString());
+  }, [config.soros]);
+
+  useEffect(() => {
+    setMartingaleText(config.martingale.toString());
+  }, [config.martingale]);
 
   // Load available timeframes
   useEffect(() => {
@@ -260,6 +297,9 @@ export default function AutoTradeConfigScreen() {
         : config.min_confidence;
       const payload = { ...config, min_confidence: normalizedConfidence };
       const savePayload = strategyId ? { ...payload, strategy_id: strategyId } : payload;
+      
+      console.log('[AutoTradeConfig] Payload completo:', JSON.stringify(savePayload, null, 2));
+      console.log('[AutoTradeConfig] execute_all_signals no payload:', savePayload.execute_all_signals);
 
       // Validar configuração antes de salvar
       if (!payload.account_id) {
@@ -393,8 +433,16 @@ export default function AutoTradeConfigScreen() {
                   <Text style={styles.label}>Valor da Operação ($)</Text>
                   <TextInput
                     style={styles.input}
-                    value={config.amount.toString()}
-                    onChangeText={(text) => setConfig({ ...config, amount: parseFloat(text) || 0 })}
+                    value={amountText}
+                    onChangeText={setAmountText}
+                    onBlur={() => {
+                      const value = parseFloat(amountText);
+                      if (!isNaN(value) && value >= 0) {
+                        setConfig({ ...config, amount: value });
+                      } else {
+                        setAmountText(config.amount.toString());
+                      }
+                    }}
                     keyboardType="numeric"
                     placeholder="1.00"
                   />
@@ -607,8 +655,16 @@ export default function AutoTradeConfigScreen() {
                   </View>
                   <TextInput
                     style={styles.input}
-                    value={config.stop1.toString()}
-                    onChangeText={(text) => setConfig({ ...config, stop1: parseInt(text) || 0 })}
+                    value={stop1Text}
+                    onChangeText={setStop1Text}
+                    onBlur={() => {
+                      const value = parseInt(stop1Text);
+                      if (!isNaN(value) && value >= 0) {
+                        setConfig({ ...config, stop1: value });
+                      } else {
+                        setStop1Text(config.stop1.toString());
+                      }
+                    }}
                     keyboardType="numeric"
                     placeholder="0 = desativado"
                   />
@@ -624,8 +680,16 @@ export default function AutoTradeConfigScreen() {
                   </View>
                   <TextInput
                     style={styles.input}
-                    value={config.stop2.toString()}
-                    onChangeText={(text) => setConfig({ ...config, stop2: parseInt(text) || 0 })}
+                    value={stop2Text}
+                    onChangeText={setStop2Text}
+                    onBlur={() => {
+                      const value = parseInt(stop2Text);
+                      if (!isNaN(value) && value >= 0) {
+                        setConfig({ ...config, stop2: value });
+                      } else {
+                        setStop2Text(config.stop2.toString());
+                      }
+                    }}
                     keyboardType="numeric"
                     placeholder="0 = desativado"
                   />
@@ -646,8 +710,16 @@ export default function AutoTradeConfigScreen() {
                   </View>
                   <TextInput
                     style={styles.input}
-                    value={config.stop_amount_win.toString()}
-                    onChangeText={(text) => setConfig({ ...config, stop_amount_win: parseFloat(text) || 0 })}
+                    value={stopAmountWinText}
+                    onChangeText={setStopAmountWinText}
+                    onBlur={() => {
+                      const value = parseFloat(stopAmountWinText);
+                      if (!isNaN(value) && value >= 0) {
+                        setConfig({ ...config, stop_amount_win: value });
+                      } else {
+                        setStopAmountWinText(config.stop_amount_win.toString());
+                      }
+                    }}
                     keyboardType="decimal-pad"
                     placeholder="0 = desativado"
                   />
@@ -663,8 +735,16 @@ export default function AutoTradeConfigScreen() {
                   </View>
                   <TextInput
                     style={styles.input}
-                    value={config.stop_amount_loss.toString()}
-                    onChangeText={(text) => setConfig({ ...config, stop_amount_loss: parseFloat(text) || 0 })}
+                    value={stopAmountLossText}
+                    onChangeText={setStopAmountLossText}
+                    onBlur={() => {
+                      const value = parseFloat(stopAmountLossText);
+                      if (!isNaN(value) && value >= 0) {
+                        setConfig({ ...config, stop_amount_loss: value });
+                      } else {
+                        setStopAmountLossText(config.stop_amount_loss.toString());
+                      }
+                    }}
                     keyboardType="decimal-pad"
                     placeholder="0 = desativado"
                   />
@@ -702,8 +782,16 @@ export default function AutoTradeConfigScreen() {
                 <View style={styles.sliderContainer}>
                   <TextInput
                     style={styles.sliderInput}
-                    value={config.soros.toString()}
-                    onChangeText={(text) => setConfig({ ...config, soros: parseInt(text) || 0 })}
+                    value={sorosText}
+                    onChangeText={setSorosText}
+                    onBlur={() => {
+                      const value = parseInt(sorosText);
+                      if (!isNaN(value) && value >= 0) {
+                        setConfig({ ...config, soros: value });
+                      } else {
+                        setSorosText(config.soros.toString());
+                      }
+                    }}
                     keyboardType="numeric"
                     placeholder="0"
                   />
@@ -719,8 +807,16 @@ export default function AutoTradeConfigScreen() {
                 <View style={styles.sliderContainer}>
                   <TextInput
                     style={styles.sliderInput}
-                    value={config.martingale.toString()}
-                    onChangeText={(text) => setConfig({ ...config, martingale: parseInt(text) || 0 })}
+                    value={martingaleText}
+                    onChangeText={setMartingaleText}
+                    onBlur={() => {
+                      const value = parseInt(martingaleText);
+                      if (!isNaN(value) && value >= 0) {
+                        setConfig({ ...config, martingale: value });
+                      } else {
+                        setMartingaleText(config.martingale.toString());
+                      }
+                    }}
                     keyboardType="numeric"
                     placeholder="0"
                   />
