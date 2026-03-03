@@ -225,54 +225,17 @@ def configure_loguru():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage application lifespan"""
-    # Limpar logs antigos ao iniciar
-    clear_logs()
+    """Manage application lifespan - otimizado para Railway"""
+    # Startup rápido - sem inicializações pesadas
+    logger.info("🚀 Application starting (Railway optimized)...")
     
-    # Configure loguru handlers (com rotação automática)
-    logger.remove()  # Remove default handler
-    configure_loguru()
-    logger.info("Loguru configurado com rotação automática")
-    
-    # Startup
-    logger.info("Starting application...")
-    
-    # Initialize database
-    db_initialized = False
-    try:
-        await init_db()
-        db_initialized = True
-        logger.info("Database initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize database: {e}")
-        logger.warning("Continuing without database - migrations may be needed")
-        # Don't raise - allow app to start for healthcheck
-    
-    # Check cache
-    cache = get_cache()
-    if cache:
-        logger.info("Cache backend initialized")
-    
-    # Initialize and start data collector service - DISABLED for Railway deploy
-    logger.info("Data collector service disabled for initial deploy")
-    
-    # Skip all background services for now - enable after healthcheck passes
-    logger.info("Background services skipped - enable manually after deploy")
-    
-    logger.info("Application started successfully")
+    # Skip all heavy initializations - already done in init_database.py
+    logger.info("✅ Fast startup mode - database initialized separately")
     
     yield
     
     # Shutdown
     logger.info("Shutting down application...")
-    
-    # Stop data collector service
-    try:
-        await data_collector.stop()
-        logger.info("Data collector service stopped")
-    except Exception as e:
-        logger.error(f"Failed to stop data collector service: {e}")
-    
     await close_db()
     logger.info("Application shut down successfully")
 
@@ -353,49 +316,6 @@ async def general_exception_handler(request: Request, exc: Exception):
 app.middleware("http")(security_headers_middleware)
 app.middleware("http")(csrf_middleware)
 app.middleware("http")(rate_limit_middleware)
-
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    """Log all requests except GET"""
-    # Não logar requisições GET
-    if request.method == "GET":
-        return await call_next(request)
-
-    start_time = datetime.utcnow()
-
-    response = await call_next(request)
-
-    duration = (datetime.utcnow() - start_time).total_seconds()
-    logger.info(
-        f"{request.method} {request.url.path} - "
-        f"Status: {response.status_code} - "
-        f"Duration: {duration:.3f}s"
-    )
-
-    return response
-
-
-@app.middleware("http")
-async def performance_metrics_middleware(request: Request, call_next):
-    """Capturar métricas de performance para o dashboard"""
-    from services.performance_monitor import performance_monitor
-    import time
-    
-    start_time = time.time()
-    
-    try:
-        response = await call_next(request)
-        latency_ms = (time.time() - start_time) * 1000
-        
-        # Registrar requisição bem-sucedida (status 2xx ou 3xx)
-        success = 200 <= response.status_code < 400
-        performance_monitor.record_request(latency_ms=latency_ms, success=success)
-        
-        return response
-    except Exception as e:
-        latency_ms = (time.time() - start_time) * 1000
-        performance_monitor.record_request(latency_ms=latency_ms, success=False)
-        raise
 
 
 # ==================== HEALTH CHECK ====================

@@ -49,7 +49,9 @@ async def seed_strategies():
                 "description": "Estratégia de confluência multi-indicadores",
                 "type": "confluence",
                 "is_active": True,
-                "is_system": True,
+                "user_id": "system",
+                "account_id": "system",
+                "assets": [],
                 "parameters": {
                     "rsi_period": 14,
                     "rsi_overbought": 70,
@@ -64,7 +66,9 @@ async def seed_strategies():
                 "description": "Cruzamento de médias móveis exponenciais",
                 "type": "ema_cross",
                 "is_active": True,
-                "is_system": True,
+                "user_id": "system",
+                "account_id": "system",
+                "assets": [],
                 "parameters": {
                     "fast_period": 9,
                     "slow_period": 21,
@@ -76,7 +80,9 @@ async def seed_strategies():
                 "description": "Divergência no indicador RSI",
                 "type": "rsi_divergence",
                 "is_active": True,
-                "is_system": True,
+                "user_id": "system",
+                "account_id": "system",
+                "assets": [],
                 "parameters": {
                     "period": 14,
                     "overbought": 70,
@@ -88,7 +94,9 @@ async def seed_strategies():
                 "description": "Trading em níveis de suporte e resistência",
                 "type": "support_resistance",
                 "is_active": True,
-                "is_system": True,
+                "user_id": "system",
+                "account_id": "system",
+                "assets": [],
                 "parameters": {
                     "lookback_period": 20,
                     "touch_threshold": 0.02
@@ -99,7 +107,9 @@ async def seed_strategies():
                 "description": "Estratégia de breakout de volatilidade",
                 "type": "breakout",
                 "is_active": True,
-                "is_system": True,
+                "user_id": "system",
+                "account_id": "system",
+                "assets": [],
                 "parameters": {
                     "atr_period": 14,
                     "multiplier": 1.5
@@ -110,7 +120,9 @@ async def seed_strategies():
                 "description": "Seguimento de tendência com ADX",
                 "type": "trend_following",
                 "is_active": True,
-                "is_system": True,
+                "user_id": "system",
+                "account_id": "system",
+                "assets": [],
                 "parameters": {
                     "adx_period": 14,
                     "adx_threshold": 25,
@@ -122,7 +134,6 @@ async def seed_strategies():
                 "description": "Squeeze de volatilidade (Bollinger + Keltner)",
                 "type": "volatility_squeeze",
                 "is_active": True,
-                "is_system": True,
                 "parameters": {
                     "bb_period": 20,
                     "bb_std": 2.0,
@@ -135,7 +146,6 @@ async def seed_strategies():
                 "description": "Análise de perfil de volume",
                 "type": "volume_profile",
                 "is_active": True,
-                "is_system": True,
                 "parameters": {
                     "lookback": 20,
                     "volume_threshold": 1.5
@@ -160,7 +170,9 @@ async def seed_strategies():
                 description=strategy_data["description"],
                 type=strategy_data["type"],
                 is_active=strategy_data["is_active"],
-                is_system=strategy_data["is_system"],
+                user_id=strategy_data["user_id"],
+                account_id=strategy_data["account_id"],
+                assets=strategy_data["assets"],
                 parameters=strategy_data["parameters"],
                 created_at=datetime.utcnow()
             )
