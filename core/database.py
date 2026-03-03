@@ -15,9 +15,16 @@ import asyncio
 # PostgreSQL connection - no SQLite-specific args needed
 connect_args = {}
 
+# Garantir que DATABASE_URL use asyncpg para async engine
+database_url = settings.DATABASE_URL
+if database_url.startswith("postgresql://"):
+    database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+elif database_url.startswith("postgres://"):
+    database_url = database_url.replace("postgres://", "postgresql+asyncpg://", 1)
+
 # Create async engine for PostgreSQL
 engine = create_async_engine(
-    settings.DATABASE_URL,
+    database_url,
     echo=settings.DB_ECHO,
     poolclass=NullPool,  # NullPool for stable async operations
     pool_pre_ping=True,
