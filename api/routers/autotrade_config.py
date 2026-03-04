@@ -65,12 +65,8 @@ async def get_available_timeframes(
                         has_sufficient_data = True
                         break
             
-            # 🚨 CORREÇÃO: Incluir timeframe se tiver dados OU se for um timeframe padrão
-            # Os timeframes 3s, 5s, 30s, 60s, 300s, 900s, 3600s e 14400s sempre estão disponíveis
-            # na PocketOption, mesmo que ainda não tenhamos dados coletados
-            is_common_timeframe = timeframe["value"] in [3, 5, 30, 60, 300, 900, 3600, 14400]
-            
-            if has_sufficient_data or is_common_timeframe:
+            # Só incluir timeframe se tiver dados suficientes
+            if has_sufficient_data:
                 available_timeframes.append(timeframe)
         
         return AvailableTimeframesResponse(available_timeframes=available_timeframes)
