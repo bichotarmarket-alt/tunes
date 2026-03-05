@@ -10,7 +10,8 @@ import time
 
 from core.database import get_db, engine
 from core.security.unified import get_security_health
-from models import User, Account, Strategy, Signal, Trade, Asset
+from models import User, Account, Strategy, Signal, Trade, Asset, StrategyPerformanceSnapshot, MonitoringAccount, AutoTradeConfig, Indicator
+from models.daily_summary import DailySignalSummary
 from api.dependencies import get_current_active_user, get_current_superuser
 from schemas import UserResponse
 from services.unified_metrics import get_unified_metrics
@@ -77,7 +78,7 @@ async def get_database_tables(
 ):
     """Listar todas as tabelas do banco de dados com contagens"""
     try:
-        # Mapeamento de tabelas principais
+        # Mapeamento de todas as tabelas do banco de dados
         tables_info = [
             {"name": "users", "description": "Usuários do sistema", "model": User},
             {"name": "accounts", "description": "Contas de trading", "model": Account},
@@ -85,6 +86,11 @@ async def get_database_tables(
             {"name": "signals", "description": "Sinais gerados", "model": Signal},
             {"name": "trades", "description": "Trades executados", "model": Trade},
             {"name": "assets", "description": "Ativos disponíveis", "model": Asset},
+            {"name": "strategy_performance_snapshots", "description": "Snapshots de performance das estratégias", "model": StrategyPerformanceSnapshot},
+            {"name": "monitoring_accounts", "description": "Contas de monitoramento", "model": MonitoringAccount},
+            {"name": "autotrade_configs", "description": "Configurações de autotrade", "model": AutoTradeConfig},
+            {"name": "indicators", "description": "Indicadores técnicos", "model": Indicator},
+            {"name": "daily_signal_summary", "description": "Resumos diários de sinais", "model": DailySignalSummary},
         ]
         
         tables = []
@@ -147,6 +153,11 @@ async def get_table_data(
             "signals": {"model": Signal, "columns": ["id", "strategy_id", "asset_id", "signal_type", "confidence", "created_at"]},
             "trades": {"model": Trade, "columns": ["id", "account_id", "asset_id", "direction", "amount", "status", "placed_at"]},
             "assets": {"model": Asset, "columns": ["id", "symbol", "name", "type", "is_active", "created_at"]},
+            "strategy_performance_snapshots": {"model": StrategyPerformanceSnapshot, "columns": ["id", "strategy_id", "period", "total_trades", "win_rate", "net_profit", "calculated_at"]},
+            "monitoring_accounts": {"model": MonitoringAccount, "columns": ["id", "name", "account_type", "is_active", "created_at"]},
+            "autotrade_configs": {"model": AutoTradeConfig, "columns": ["id", "account_id", "strategy_id", "amount", "is_active", "created_at"]},
+            "indicators": {"model": Indicator, "columns": ["id", "name", "type", "is_active", "is_default", "created_at"]},
+            "daily_signal_summary": {"model": DailySignalSummary, "columns": ["id", "date", "strategy_id", "asset_id", "total_signals", "executed_signals", "updated_at"]},
         }
         
         if table_name not in allowed_tables:
