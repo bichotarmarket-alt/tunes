@@ -35,11 +35,16 @@ def run_migrations():
     try:
         import asyncio
         from core.database import engine, Base
-        from models import User, Strategy  # Importar modelos
+        from models import User, Strategy  # Importar modelos principais
+        # Importar e criar tabelas do daily_summary (Base separado)
+        from models.daily_summary import Base as DailySummaryBase
         
         async def create_tables():
             async with engine.begin() as conn:
+                # Criar tabelas do metadata principal
                 await conn.run_sync(Base.metadata.create_all)
+                # Criar tabelas do daily_summary
+                await conn.run_sync(DailySummaryBase.metadata.create_all)
         
         asyncio.run(create_tables())
         logger.info("✅ Tabelas criadas com create_all")
