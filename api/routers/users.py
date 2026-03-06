@@ -80,132 +80,148 @@ async def get_current_user_info(
 
 
 @router.get("/me/stats", response_model=UserStats)
-@cache_response(ttl=120, key_prefix="users:stats")
+@cache_response(ttl=300, key_prefix="users:stats")  # Aumentado para 5 min
 async def get_user_stats(
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get user statistics including demo and real account stats"""
+    """Get user statistics using SQL aggregation - optimized for 1000+ users"""
+    from sqlalchemy import func, case, and_, or_
+    
     # Get user's accounts
     result = await db.execute(
         select(Account).where(Account.user_id == current_user.id)
     )
     accounts = result.scalars().all()
     
-    # Calculate demo stats
+    # Get account balances
     demo_account = next((acc for acc in accounts if acc.ssid_demo is not None), None)
     demo_balance = demo_account.balance_demo if demo_account else 0.0
     
-    # Get demo trades
-    demo_trades_result = await db.execute(
-        select(Trade)
-        .join(Account)
-        .where(
-            Account.user_id == current_user.id,
-            Trade.connection_type == 'demo'
-        )
-    )
-    demo_trades = demo_trades_result.scalars().all()
-    
-    demo_total_trades = len(demo_trades)
-    demo_trades_with_profit = sum(1 for t in demo_trades if t.profit is not None)
-    demo_winning_trades = sum(1 for t in demo_trades if t.profit and t.profit > 0)
-    demo_losing_trades = sum(1 for t in demo_trades if t.profit and t.profit < 0)
-    demo_win_rate = (demo_winning_trades / demo_trades_with_profit * 100) if demo_trades_with_profit > 0 else 0
-    demo_loss_rate = (demo_losing_trades / demo_trades_with_profit * 100) if demo_trades_with_profit > 0 else 0
-    
-    # Calculate real stats
     real_account = next((acc for acc in accounts if acc.ssid_real is not None), None)
     real_balance = real_account.balance_real if real_account else 0.0
     
-    # Get real trades
-    real_trades_result = await db.execute(
-        select(Trade)
-        .join(Account)
-        .where(
-            Account.user_id == current_user.id,
-            Trade.connection_type == 'real'
-        )
-    )
-    real_trades = real_trades_result.scalars().all()
+    account_ids = [acc.id for acc in accounts]
     
-    real_total_trades = len(real_trades)
-    real_trades_with_profit = sum(1 for t in real_trades if t.profit is not None)
-    real_winning_trades = sum(1 for t in real_trades if t.profit and t.profit > 0)
-    real_losing_trades = sum(1 for t in real_trades if t.profit and t.profit < 0)
-    real_win_rate = (real_winning_trades / real_trades_with_profit * 100) if real_trades_with_profit > 0 else 0
-    real_loss_rate = (real_losing_trades / real_trades_with_profit * 100) if real_trades_with_profit > 0 else 0
-    
-    # Calcular campos adicionais para dashboard usando histórico real do usuário
-    all_trades = demo_trades + real_trades
-    
-    # Filtrar apenas trades com status win ou loss (trades finalizados)
-    completed_trades = [t for t in all_trades if t.status in ['win', 'loss']]
-    
+    # SQL aggregation para DEMO trades - tudo em UMA query
     now = datetime.utcnow()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     week_start = today_start - timedelta(days=7)
     
-    # Calcular lucro de hoje (apenas trades finalizados com profit definido)
-    trades_today = [t for t in completed_trades if t.placed_at and t.placed_at >= today_start and t.profit is not None]
-    lucro_hoje = sum(t.profit for t in trades_today)
+    # Query otimizada com aggregation para demo
+    demo_stats_result = await db.execute(
+        select(
+            func.count().label('total_trades'),
+            func.sum(case((Trade.profit > 0, 1), else_=0)).label('winning_trades'),
+            func.sum(case((Trade.profit < 0, 1), else_=0)).label('losing_trades'),
+            func.sum(case((Trade.profit.isnot(None), 1), else_=0)).label('trades_with_profit'),
+            func.sum(Trade.profit).label('total_profit'),
+            func.max(Trade.profit).label('max_profit'),
+            func.min(Trade.profit).label('min_profit'),
+            func.sum(Trade.duration).label('total_duration'),
+            func.sum(case((and_(
+                Trade.placed_at >= today_start,
+                Trade.profit.isnot(None),
+                or_(Trade.status == 'win', Trade.status == 'loss')
+            ), Trade.profit), else_=0)).label('lucro_hoje'),
+            func.sum(case((and_(
+                Trade.placed_at >= week_start,
+                Trade.profit.isnot(None),
+                or_(Trade.status == 'win', Trade.status == 'loss')
+            ), Trade.profit), else_=0)).label('lucro_semana'),
+            func.count(case((and_(
+                Trade.placed_at >= today_start,
+                or_(Trade.status == 'win', Trade.status == 'loss')
+            ), 1), else_=None)).label('trades_hoje'),
+        )
+        .where(
+            Trade.account_id.in_(account_ids),
+            Trade.connection_type == 'demo',
+            or_(Trade.status == 'win', Trade.status == 'loss')  # Apenas finalizados
+        )
+    )
+    demo_stats = demo_stats_result.one()
     
-    # Calcular lucro da semana (apenas trades finalizados com profit definido)
-    trades_week = [t for t in completed_trades if t.placed_at and t.placed_at >= week_start and t.profit is not None]
-    lucro_semana = sum(t.profit for t in trades_week)
+    # Query otimizada com aggregation para REAL trades
+    real_stats_result = await db.execute(
+        select(
+            func.count().label('total_trades'),
+            func.sum(case((Trade.profit > 0, 1), else_=0)).label('winning_trades'),
+            func.sum(case((Trade.profit < 0, 1), else_=0)).label('losing_trades'),
+            func.sum(case((Trade.profit.isnot(None), 1), else_=0)).label('trades_with_profit'),
+        )
+        .where(
+            Trade.account_id.in_(account_ids),
+            Trade.connection_type == 'real',
+            or_(Trade.status == 'win', Trade.status == 'loss')
+        )
+    )
+    real_stats = real_stats_result.one()
     
-    # Calcular trades de hoje (apenas trades finalizados)
-    trades_hoje = len(trades_today)
+    # Calcular estatísticas DEMO
+    demo_total = demo_stats.total_trades or 0
+    demo_winning = demo_stats.winning_trades or 0
+    demo_with_profit = demo_stats.trades_with_profit or 0
+    demo_win_rate = (demo_winning / demo_with_profit * 100) if demo_with_profit > 0 else 0
+    demo_loss_rate = ((demo_stats.losing_trades or 0) / demo_with_profit * 100) if demo_with_profit > 0 else 0
     
-    # Calcular maior ganho e maior perda (apenas trades finalizados)
-    profits = [t.profit for t in completed_trades if t.profit is not None]
-    maior_ganho = max(profits) if profits else 0.0
-    maior_perda = min(profits) if profits else 0.0
+    # Calcular estatísticas REAL
+    real_total = real_stats.total_trades or 0
+    real_winning = real_stats.winning_trades or 0
+    real_with_profit = real_stats.trades_with_profit or 0
+    real_win_rate = (real_winning / real_with_profit * 100) if real_with_profit > 0 else 0
+    real_loss_rate = ((real_stats.losing_trades or 0) / real_with_profit * 100) if real_with_profit > 0 else 0
     
-    # Calcular taxa de sucesso (win rate geral - apenas trades finalizados)
-    total_winning = sum(1 for t in completed_trades if t.profit and t.profit > 0)
-    total_with_profit = sum(1 for t in completed_trades if t.profit is not None)
-    taxa_sucesso = (total_winning / total_with_profit * 100) if total_with_profit > 0 else 0.0
-    
-    # Calcular melhor estratégia (estratégia com maior win rate - apenas trades finalizados)
-    strategy_stats = {}
-    strategy_ids = set()
-    for trade in completed_trades:
-        if trade.strategy_id:
-            if trade.strategy_id not in strategy_stats:
-                strategy_stats[trade.strategy_id] = {'wins': 0, 'total': 0}
-            strategy_stats[trade.strategy_id]['total'] += 1
-            if trade.profit and trade.profit > 0:
-                strategy_stats[trade.strategy_id]['wins'] += 1
-            strategy_ids.add(trade.strategy_id)
-    
+    # Melhor estratégia (aggregation em SQL)
     melhor_estrategia = "N/A"
     melhor_win_rate = 0
     
-    # Buscar todas as estratégias de uma vez para evitar N+1 queries
-    if strategy_ids:
-        strategies_result = await db.execute(
-            select(Strategy).where(Strategy.id.in_(list(strategy_ids)))
+    strategy_stats_result = await db.execute(
+        select(
+            Trade.strategy_id,
+            func.count().label('total'),
+            func.sum(case((Trade.profit > 0, 1), else_=0)).label('wins')
         )
-        strategies_map = {s.id: s.name for s in strategies_result.scalars().all()}
-        
-        for strategy_id, stats in strategy_stats.items():
-            if stats['total'] > 0:
-                win_rate = (stats['wins'] / stats['total'] * 100)
-                if win_rate > melhor_win_rate:
-                    melhor_win_rate = win_rate
-                    melhor_estrategia = strategies_map.get(strategy_id, "N/A")
+        .where(
+            Trade.account_id.in_(account_ids),
+            Trade.strategy_id.isnot(None),
+            or_(Trade.status == 'win', Trade.status == 'loss')
+        )
+        .group_by(Trade.strategy_id)
+    )
     
-    # Calcular tempo ativo (soma de durações de trades finalizados)
-    total_seconds = sum(t.duration for t in completed_trades if t.duration)
-    hours = total_seconds // 3600
-    minutes = (total_seconds % 3600) // 60
+    strategy_stats = strategy_stats_result.all()
+    best_strategy_id = None
+    
+    for row in strategy_stats:
+        if row.total > 0:
+            win_rate = (row.wins / row.total * 100)
+            if win_rate > melhor_win_rate:
+                melhor_win_rate = win_rate
+                best_strategy_id = row.strategy_id
+    
+    if best_strategy_id:
+        strategy_name_result = await db.execute(
+            select(Strategy.name).where(Strategy.id == best_strategy_id)
+        )
+        strategy_name = strategy_name_result.scalar()
+        if strategy_name:
+            melhor_estrategia = strategy_name
+    
+    # Calcular tempo ativo
+    total_seconds = demo_stats.total_duration or 0
+    hours = int(total_seconds // 3600)
+    minutes = int((total_seconds % 3600) // 60)
     tempo_ativo = f"{hours}h {minutes}m"
     
-    # Calcular highest_balance (maior saldo máximo entre todas as configs do usuário)
+    # Taxa de sucesso geral
+    total_completed = demo_total + real_total
+    total_completed_winning = demo_winning + real_winning
+    taxa_sucesso = (total_completed_winning / (demo_with_profit + real_with_profit) * 100) if (demo_with_profit + real_with_profit) > 0 else 0.0
+    
+    # Highest balance
     highest_balance = None
-    if accounts:
-        account_ids = [acc.id for acc in accounts]
+    if account_ids:
         autotrade_result = await db.execute(
             select(AutoTradeConfig.highest_balance)
             .where(AutoTradeConfig.account_id.in_(account_ids))
@@ -223,16 +239,16 @@ async def get_user_stats(
         win_rate_real=real_win_rate,
         loss_rate_demo=demo_loss_rate,
         loss_rate_real=real_loss_rate,
-        total_trades_demo=demo_total_trades,
-        total_trades_real=real_total_trades,
-        # Campos adicionais para dashboard
-        lucro_hoje=lucro_hoje,
-        lucro_semana=lucro_semana,
+        total_trades_demo=demo_total,
+        total_trades_real=real_total,
+        # Campos adicionais
+        lucro_hoje=demo_stats.lucro_hoje or 0.0,
+        lucro_semana=demo_stats.lucro_semana or 0.0,
         melhor_estrategia=melhor_estrategia,
         taxa_sucesso=taxa_sucesso,
-        trades_hoje=trades_hoje,
-        maior_ganho=maior_ganho,
-        maior_perda=maior_perda,
+        trades_hoje=demo_stats.trades_hoje or 0,
+        maior_ganho=demo_stats.max_profit or 0.0,
+        maior_perda=demo_stats.min_profit or 0.0,
         tempo_ativo=tempo_ativo,
         highest_balance=highest_balance,
     )

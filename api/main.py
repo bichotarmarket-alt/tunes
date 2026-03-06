@@ -1,6 +1,7 @@
 """FastAPI main application"""
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from slowapi import Limiter
@@ -134,14 +135,12 @@ def configure_loguru():
         format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> | <level>{message}</level>"
     )
 
-    # File handler - app.log (usa LOG_LEVEL do .env)
+    # File handler - app.log (usa LOG_LEVEL do .env) - ROTAÇÃO: ~20k linhas (500KB)
     logger.add(
         sink="logs/app.log",
         level=log_level,
         format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {extra[user_name]:<15} | {extra[account_id]:<6} | {extra[account_type]:<4} | {name}:{function}:{line} | {message}",
-        rotation="1 day",
-        retention="7 days",
-        compression="zip"
+        rotation="500 KB"  # Rotação por tamanho (~20k linhas)
     )
 
     # File handler - errors.log (sempre ERROR)
@@ -154,14 +153,12 @@ def configure_loguru():
         compression="zip"
     )
 
-    # File handler - Data collector logs (usa LOG_LEVEL do .env)
+    # File handler - Data collector logs (usa LOG_LEVEL do .env) - ROTAÇÃO: ~20k linhas (500KB)
     logger.add(
         sink="logs/data_collector.log",
         level=log_level,
         format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {extra[user_name]:<15} | {extra[account_id]:<6} | {extra[account_type]:<4} | {name}:{function}:{line} | {message}",
-        rotation="1 day",
-        retention="7 days",
-        compression="zip",
+        rotation="500 KB",  # Rotação por tamanho (~20k linhas)
         filter=lambda record: "data_collector" in record["name"]
     )
 
@@ -351,6 +348,10 @@ app.add_middleware(
 
 # Setup metrics middleware for performance monitoring
 setup_metrics_middleware(app)
+
+# Add GZip compression middleware (reduz tamanho das respostas JSON)
+# Compress respostas maiores que 1KB para evitar overhead em respostas pequenas
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
 # ==================== EXCEPTION HANDLERS ====================

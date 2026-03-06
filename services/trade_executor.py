@@ -1467,6 +1467,8 @@ class TradeExecutor:
 
             config.loss_consecutive = 0
             config.win_consecutive = 0
+            config.total_losses = 0  # Reset: ciclo terminou
+            config.total_wins = 0      # Reset: ciclo terminou
             config.soros_level = 0
             config.soros_amount = 0.0
             config.martingale_level = 0

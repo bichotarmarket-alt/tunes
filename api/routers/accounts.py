@@ -251,7 +251,7 @@ async def update_my_account(
         # Invalidar cache de configurações de autotrade para forçar recarga
         try:
             if hasattr(data_collector, 'invalidate_autotrade_configs_cache'):
-                data_collector.invalidate_autotrade_configs_cache()
+                await data_collector.invalidate_autotrade_configs_cache()
                 logger.info(f" Cache de configs invalidado após troca de conta", extra={
                     "user_name": current_user.name if current_user else "",
                     "account_id": account.id[:8] if account else "",

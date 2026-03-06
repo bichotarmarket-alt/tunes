@@ -229,7 +229,7 @@ async def create_autotrade_config(
         try:
             from services.data_collector.realtime import data_collector
             if data_collector:
-                data_collector.invalidate_autotrade_configs_cache()
+                await data_collector.invalidate_autotrade_configs_cache()
                 logger.info("✓ Cache de configs invalidado após atualização de autotrade")
         except Exception as e:
             logger.error(f"Erro ao invalidar cache de configs (autotrade): {e}")
@@ -247,7 +247,7 @@ async def create_autotrade_config(
     try:
         from services.data_collector.realtime import data_collector
         if data_collector:
-            data_collector.invalidate_autotrade_configs_cache()
+            await data_collector.invalidate_autotrade_configs_cache()
             logger.info("✓ Cache de configs invalidado após criação de autotrade")
     except Exception as e:
         logger.error(f"Erro ao invalidar cache de configs (autotrade): {e}")
@@ -422,7 +422,7 @@ async def update_autotrade_config(
     try:
         from services.data_collector.realtime import data_collector
         if data_collector:
-            data_collector.invalidate_autotrade_configs_cache()
+            await data_collector.invalidate_autotrade_configs_cache()
             logger.info("✓ Cache de configs invalidado após atualização de autotrade")
     except Exception as e:
         logger.error(f"Erro ao invalidar cache de configs (autotrade): {e}")

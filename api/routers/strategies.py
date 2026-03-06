@@ -79,33 +79,44 @@ async def _build_strategy_response(strategy: Strategy, db: AsyncSession) -> Stra
 async def get_strategies(
     active: bool = None,
     strategy_type: str = None,
+    limit: int = 100,  # Paginação padrão
+    offset: int = 0,
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get all strategies for current user"""
+    """Get all strategies for current user with pagination"""
     from models import AutoTradeConfig
 
-    query = select(Strategy).options(selectinload(Strategy.indicators)).where(Strategy.user_id == current_user.id)
+    # Query otimizada com join para evitar N+1
+    query = (
+        select(Strategy, AutoTradeConfig.is_active.label('autotrade_active'))
+        .outerjoin(AutoTradeConfig, Strategy.id == AutoTradeConfig.strategy_id)
+        .options(selectinload(Strategy.indicators))
+        .where(Strategy.user_id == current_user.id)
+    )
 
     if active is not None:
         query = query.where(Strategy.is_active == active)
 
     if strategy_type:
         query = query.where(Strategy.type == strategy_type)
+    
+    # Adicionar paginação
+    query = query.limit(limit).offset(offset)
+    
+    # Ordernar por mais recente
+    query = query.order_by(Strategy.created_at.desc())
 
     result = await db.execute(query)
-    strategies = result.scalars().all()
+    rows = result.all()
 
     responses = []
-    for strategy in strategies:
-        # Buscar autotrade_config para verificar o estado real
-        autotrade_config_result = await db.execute(
-            select(AutoTradeConfig).where(AutoTradeConfig.strategy_id == strategy.id)
-        )
-        autotrade_config = autotrade_config_result.scalar_one_or_none()
-
+    for row in rows:
+        strategy = row.Strategy
+        autotrade_active = row.autotrade_active
+        
         # Usar autotrade_config.is_active se existir, senão strategy.is_active
-        actual_is_active = autotrade_config.is_active if autotrade_config else strategy.is_active
+        actual_is_active = autotrade_active if autotrade_active is not None else strategy.is_active
 
         responses.append(
             StrategyResponse(
@@ -138,7 +149,7 @@ async def get_strategies(
 
 
 @router.get("/performance", response_model=List[StrategyPerformanceSnapshotResponse])
-@cache_response(ttl=60, key_prefix="strategies:performance")
+@cache_response(ttl=300, key_prefix="strategies:performance")  # Cache aumentado para 5 min
 async def get_strategy_performance(
     strategy_id: Optional[str] = None,
     period: str = "30d",
@@ -619,7 +630,7 @@ async def delete_strategy(
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Delete strategy"""
+    """Delete strategy - otimizado com DELETE em batch para 1000+ usuários"""
     result = await db.execute(
         select(Strategy).where(
             Strategy.id == strategy_id,
@@ -634,28 +645,23 @@ async def delete_strategy(
             detail="Strategy not found"
         )
 
-    # Delete related autotrade configs first
-    from models import AutoTradeConfig
-    configs_result = await db.execute(
-        select(AutoTradeConfig).where(AutoTradeConfig.strategy_id == strategy_id)
-    )
-    configs = configs_result.scalars().all()
-    for config in configs:
-        await db.delete(config)
-
-    # Delete related trades
-    from models import Trade
-    trades_result = await db.execute(
-        select(Trade).where(Trade.strategy_id == strategy_id)
-    )
-    trades = trades_result.scalars().all()
-    for trade in trades:
-        await db.delete(trade)
-
-    # Delete related strategy indicators (association table)
-    from models import strategy_indicators
+    # Otimização: DELETE em batch em vez de loop um por um
+    from sqlalchemy import delete
+    from models import AutoTradeConfig, Trade, strategy_indicators
+    
+    # Delete autotrade configs em batch
     await db.execute(
-        strategy_indicators.delete().where(strategy_indicators.c.strategy_id == strategy_id)
+        delete(AutoTradeConfig).where(AutoTradeConfig.strategy_id == strategy_id)
+    )
+
+    # Delete trades em batch
+    await db.execute(
+        delete(Trade).where(Trade.strategy_id == strategy_id)
+    )
+
+    # Delete strategy indicators (association table) em batch
+    await db.execute(
+        delete(strategy_indicators).where(strategy_indicators.c.strategy_id == strategy_id)
     )
 
     # Now delete the strategy

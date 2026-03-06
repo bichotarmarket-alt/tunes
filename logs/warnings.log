@@ -1,17 +1,4 @@
-2026-03-04 11:03:17 | WARNING  |                 |        |      | core.security.unified:initialize:104 | [SECURITY] Sistema inicializado em modo fallback (sem Redis)
-2026-03-04 11:03:17 | WARNING  |                 |        |      | api.main:lifespan:278 | ⚠️ Security system initialized in fallback mode (Redis unavailable)
-2026-03-04 11:18:37 | WARNING  |                 |        |      | services.data_collector.realtime:_rebalance_assets:1341 | [Rebalance] ATIVOS Client 1: apenas 9 ativos monitorados, precisa de 1 mais
-2026-03-04 11:24:38 | WARNING  |                 |        |      | services.data_collector.realtime:_rebalance_assets:1341 | [Rebalance] ATIVOS Client 1: apenas 9 ativos monitorados, precisa de 1 mais
-2026-03-04 11:25:39 | WARNING  |                 |        |      | services.data_collector.realtime:_rebalance_assets:1341 | [Rebalance] ATIVOS Client 1: apenas 9 ativos monitorados, precisa de 1 mais
-2026-03-04 11:35:40 | WARNING  |                 |        |      | services.data_collector.local_storage:delete_asset_file:430 | Arquivo CADJPY_otc em uso, tentando novamente em 100ms...
-2026-03-04 11:35:41 | WARNING  |                 |        |      | services.data_collector.realtime:_rebalance_assets:1341 | [Rebalance] ATIVOS Client 1: apenas 9 ativos monitorados, precisa de 1 mais
-2026-03-04 11:39:42 | WARNING  |                 |        |      | services.data_collector.realtime:_rebalance_assets:1341 | [Rebalance] ATIVOS Client 1: apenas 9 ativos monitorados, precisa de 1 mais
-2026-03-04 11:45:42 | WARNING  |                 |        |      | services.data_collector.realtime:_rebalance_assets:1341 | [Rebalance] ATIVOS Client 1: apenas 8 ativos monitorados, precisa de 2 mais
-2026-03-04 11:50:44 | WARNING  |                 |        |      | services.data_collector.realtime:_rebalance_assets:1341 | [Rebalance] ATIVOS Client 1: apenas 8 ativos monitorados, precisa de 2 mais
-2026-03-04 11:51:44 | WARNING  |                 |        |      | services.data_collector.realtime:_rebalance_assets:1341 | [Rebalance] ATIVOS Client 1: apenas 9 ativos monitorados, precisa de 1 mais
-2026-03-04 11:54:45 | WARNING  |                 |        |      | services.data_collector.realtime:_rebalance_assets:1341 | [Rebalance] ATIVOS Client 1: apenas 9 ativos monitorados, precisa de 1 mais
-2026-03-04 11:55:45 | WARNING  |                 |        |      | services.data_collector.realtime:_rebalance_assets:1341 | [Rebalance] ATIVOS Client 1: apenas 8 ativos monitorados, precisa de 2 mais
-2026-03-04 12:00:46 | WARNING  |                 |        |      | services.data_collector.realtime:_rebalance_assets:1341 | [Rebalance] ATIVOS Client 1: apenas 9 ativos monitorados, precisa de 1 mais
-2026-03-04 12:03:47 | WARNING  |                 |        |      | services.data_collector.realtime:_rebalance_assets:1341 | [Rebalance] ATIVOS Client 1: apenas 9 ativos monitorados, precisa de 1 mais
-2026-03-04 12:12:48 | WARNING  |                 |        |      | services.data_collector.realtime:_rebalance_assets:1341 | [Rebalance] ATIVOS Client 1: apenas 8 ativos monitorados, precisa de 2 mais
-2026-03-04 12:15:49 | WARNING  |                 |        |      | services.data_collector.realtime:_rebalance_assets:1341 | [Rebalance] ATIVOS Client 1: apenas 6 ativos monitorados, precisa de 4 mais
+2026-03-05 20:41:08 | WARNING  |                 |        |      | core.security.unified:initialize:104 | [SECURITY] Sistema inicializado em modo fallback (sem Redis)
+2026-03-05 20:41:08 | WARNING  |                 |        |      | api.main:lifespan:275 | ⚠️ Security system initialized in fallback mode (Redis unavailable)
+2026-03-05 20:42:21 | WARNING  |                 |        |      | services.data_collector.realtime:_rebalance_assets:1294 | [Rebalance] #CITI_otc: NUNCA recebeu ticks desde a inscrição
+2026-03-05 20:42:21 | WARNING  |                 |        |      | services.data_collector.realtime:_rebalance_assets:1341 | [Rebalance] ATIVOS Client 1: apenas 8 ativos monitorados, precisa de 2 mais
