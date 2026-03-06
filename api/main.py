@@ -18,6 +18,7 @@ from core.cache import get_cache
 from core.security.unified import initialize_security, shutdown_security, get_security_health
 from core.middleware import rate_limit_middleware, csrf_middleware, security_headers_middleware
 from core.middleware.metrics import setup_metrics_middleware
+from api.cache import init_cache as init_api_cache, close_cache as close_api_cache
 from schemas import HealthResponse, ErrorResponse, MessageResponse
 from loguru import logger
 
@@ -140,7 +141,7 @@ def configure_loguru():
         sink="logs/app.log",
         level=log_level,
         format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {extra[user_name]:<15} | {extra[account_id]:<6} | {extra[account_type]:<4} | {name}:{function}:{line} | {message}",
-        rotation="500 KB"  # Rotação por tamanho (~20k linhas)
+        rotation="50 MB"  # Rotação por tamanho (~20k linhas)
     )
 
     # File handler - errors.log (sempre ERROR)
@@ -158,7 +159,7 @@ def configure_loguru():
         sink="logs/data_collector.log",
         level=log_level,
         format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {extra[user_name]:<15} | {extra[account_id]:<6} | {extra[account_type]:<4} | {name}:{function}:{line} | {message}",
-        rotation="500 KB",  # Rotação por tamanho (~20k linhas)
+        rotation="50 MB",  # Rotação por tamanho (~20k linhas)
         filter=lambda record: "data_collector" in record["name"]
     )
 
@@ -257,12 +258,12 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f"❌ Database initialization failed: {e}")
         
-        # Initialize cache
+        # Initialize admin API cache (Redis)
         try:
-            cache = get_cache()
-            logger.info("✅ Cache backend initialized")
+            await init_api_cache()
+            logger.info("✅ Admin API cache initialized")
         except Exception as e:
-            logger.warning(f"⚠️ Cache initialization failed: {e}")
+            logger.warning(f"⚠️ Admin API cache initialization failed: {e}")
         
         # Initialize security (Redis sessions, token blacklist, audit)
         try:
@@ -318,8 +319,12 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"⚠️ Error shutting down security system: {e}")
     
-    await close_db()
-    logger.info("Application shut down successfully")
+        # Close admin API cache
+        try:
+            await close_api_cache()
+            logger.info("✅ Admin API cache closed")
+        except Exception as e:
+            logger.warning(f"⚠️ Error closing admin API cache: {e}")
 
 
 # Create FastAPI application
