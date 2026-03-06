@@ -7,13 +7,12 @@ from functools import lru_cache
 
 
 def get_database_url():
-    """Get DATABASE_URL with Railway fallback"""
-    # Tentar ler diretamente do ambiente primeiro (Railway)
+    """Get DATABASE_URL from environment (required)"""
     url = os.getenv('DATABASE_URL')
     if url:
         return url
-    # Fallback para desenvolvimento
-    return "sqlite+aiosqlite:///./autotrade.db"
+    # Sem fallback SQLite - PostgreSQL é obrigatório
+    raise ValueError("DATABASE_URL não configurada! Defina a variável de ambiente com a URL do PostgreSQL.")
 
 
 def get_redis_url():
