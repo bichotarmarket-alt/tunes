@@ -1,8 +1,28 @@
 """Configuration settings for the application"""
+import os
 from typing import List, Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field, field_validator, model_validator
 from functools import lru_cache
+
+
+def get_database_url():
+    """Get DATABASE_URL with Railway fallback"""
+    # Tentar ler diretamente do ambiente primeiro (Railway)
+    url = os.getenv('DATABASE_URL')
+    if url:
+        return url
+    # Fallback para desenvolvimento
+    return "sqlite+aiosqlite:///./autotrade.db"
+
+
+def get_redis_url():
+    """Get REDIS_URL with Railway fallback"""
+    # Tentar ler diretamente do ambiente primeiro (Railway)
+    url = os.getenv('REDIS_URL')
+    if url:
+        return url
+    return None
 
 
 class Settings(BaseSettings):
@@ -20,13 +40,13 @@ class Settings(BaseSettings):
 
     # Database - usa variável de ambiente ou SQLite como fallback (apenas em desenvolvimento)
     DATABASE_URL: str = Field(
-        default="sqlite+aiosqlite:///./autotrade.db",
+        default_factory=get_database_url,
         env="DATABASE_URL"
     )
     DB_ECHO: bool = False
 
     # Redis (opcional - pode ser desabilitado)
-    redis_url_value: Optional[str] = Field(default=None, env="REDIS_URL")
+    redis_url_value: Optional[str] = Field(default_factory=get_redis_url, env="REDIS_URL")
     REDIS_HOST: str = Field(default="localhost", env="REDIS_HOST")
     REDIS_PORT: int = Field(default=6379, env="REDIS_PORT")
     REDIS_DB: int = Field(default=0, env="REDIS_DB")
