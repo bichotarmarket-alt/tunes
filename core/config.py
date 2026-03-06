@@ -1,7 +1,7 @@
 """Configuration settings for the application"""
 from typing import List, Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from functools import lru_cache
 
 
@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     DB_ECHO: bool = False
 
     # Redis (opcional - pode ser desabilitado)
-    REDIS_URL: Optional[str] = Field(default=None, env="REDIS_URL")
+    redis_url_value: Optional[str] = Field(default=None, env="REDIS_URL")
     REDIS_HOST: str = Field(default="localhost", env="REDIS_HOST")
     REDIS_PORT: int = Field(default=6379, env="REDIS_PORT")
     REDIS_DB: int = Field(default=0, env="REDIS_DB")
@@ -194,16 +194,13 @@ class Settings(BaseSettings):
             return f"redis://:{self.REDIS_PASSWORD}@{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
-    @field_validator('REDIS_ENABLED')
-    @classmethod
-    def validate_redis_config(cls, v, info):
-        if v:
-            # Validar que host está configurado
-            host = info.data.get('REDIS_HOST')
-            port = info.data.get('REDIS_PORT')
-            if not host or not port:
+    @model_validator(mode='after')
+    def validate_redis_config(self):
+        """Validar configuração Redis após todos os campos serem carregados"""
+        if self.REDIS_ENABLED:
+            if not self.REDIS_HOST or not self.REDIS_PORT:
                 raise ValueError('REDIS_HOST e REDIS_PORT são obrigatórios quando REDIS_ENABLED=true')
-        return v
+        return self
 
     @property
     def is_production(self) -> bool:
