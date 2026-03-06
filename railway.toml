@@ -5,7 +5,7 @@ builder = "nixpacks"
 python_version = "3.11"
 
 [deploy]
-startCommand = "python init_database.py; python start_railway.py"
+startCommand = "bash start.sh"
 healthcheckPath = "/health"
 healthcheckTimeout = 60
 restartPolicyType = "ON_FAILURE"
