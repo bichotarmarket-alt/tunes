@@ -1,12 +1,12 @@
-2026-03-06 14:26:36 | INFO     |                 |        |      |                      | services.trade_executor:start_monitoring:49 | Monitoramento de trades ativos iniciado (WebSocket events + fallback polling)
-2026-03-06 14:27:36 | DEBUG    |                 |        |      |                      | services.trade_executor:_monitor_active_trades:286 | Sem conexões ativas para monitorar trades expirados
-2026-03-06 14:28:37 | DEBUG    |                 |        |      |                      | services.trade_executor:_monitor_active_trades:286 | Sem conexões ativas para monitorar trades expirados
-2026-03-06 14:29:37 | DEBUG    |                 |        |      |                      | services.trade_executor:_monitor_active_trades:286 | Sem conexões ativas para monitorar trades expirados
-2026-03-06 14:30:37 | DEBUG    |                 |        |      |                      | services.trade_executor:_monitor_active_trades:286 | Sem conexões ativas para monitorar trades expirados
-2026-03-06 14:31:37 | DEBUG    |                 |        |      |                      | services.trade_executor:_monitor_active_trades:286 | Sem conexões ativas para monitorar trades expirados
-2026-03-06 14:32:37 | DEBUG    |                 |        |      |                      | services.trade_executor:_monitor_active_trades:286 | Sem conexões ativas para monitorar trades expirados
-2026-03-06 14:33:37 | DEBUG    |                 |        |      |                      | services.trade_executor:_monitor_active_trades:286 | Sem conexões ativas para monitorar trades expirados
-2026-03-06 14:34:37 | DEBUG    |                 |        |      |                      | services.trade_executor:_monitor_active_trades:286 | Sem conexões ativas para monitorar trades expirados
-2026-03-06 14:35:37 | DEBUG    |                 |        |      |                      | services.trade_executor:_monitor_active_trades:286 | Sem conexões ativas para monitorar trades expirados
-2026-03-06 14:36:37 | DEBUG    |                 |        |      |                      | services.trade_executor:_monitor_active_trades:286 | Sem conexões ativas para monitorar trades expirados
-2026-03-06 14:37:37 | DEBUG    |                 |        |      |                      | services.trade_executor:_monitor_active_trades:286 | Sem conexões ativas para monitorar trades expirados
+2026-03-06 15:37:40 | INFO     |                 |        |      |                      | services.trade_executor:start_monitoring:49 | Monitoramento de trades ativos iniciado (WebSocket events + fallback polling)
+2026-03-06 15:38:40 | DEBUG    |                 |        |      |                      | services.trade_executor:_monitor_active_trades:286 | Sem conexões ativas para monitorar trades expirados
+2026-03-06 15:38:45 | SUCCESS  |                 |        |      |                      | services.trade_executor:execute_trade:925 | 🎯 [TradeExecutor] Iniciando execução de trade | ADA-USD_otc | AutoTrade-Leandro Souza | 5s | BUY | confiança=0.62
+2026-03-06 15:38:45 | DEBUG    |                 |        |      |                      | services.trade_executor:_get_connection_for_account_id:1328 | Usando conexão demo da conta Leandro Souza
+2026-03-06 15:38:45 | INFO     |                 |        |      |                      | services.trade_executor:execute_trade:948 | 📋 [TradeExecutor] Conta específica solicitada: Leandro Souza
+2026-03-06 15:38:45 | INFO     |                 |        |      |                      | services.trade_executor:execute_trade:961 | ✓ [TradeExecutor] Configuração de autotrade fornecida: timeframe=5s, strategy=65185ab5-892e-42e9-92e1-d17456905a52
+2026-03-06 15:38:45 | SUCCESS  |                 |        |      |                      | services.trade_executor:execute_trade:973 | ✓ [TradeExecutor] Timeframe 5s OK
+2026-03-06 15:38:45 | INFO     |                 |        |      |                      | services.trade_executor:execute_trade:994 | 📋 [TradeExecutor] Conta selecionada: Leandro Souza
+2026-03-06 15:38:45 | DEBUG    |                 |        |      |                      | services.trade_executor:execute_trade:998 | [TradeExecutor] trade_timing=on_signal
+2026-03-06 15:38:45 | DEBUG    |                 |        |      |                      | services.trade_executor:_process_pending_expired_trades:2007 | ✅ [TradeExecutor] Nenhum trade expirado pendente para conta 986ab179
+2026-03-06 15:38:45 | WARNING  |                 |        |      |                      | services.trade_executor:_choose_account_config:1422 | ⚠️ [TradeExecutor] Nenhuma configuração ativa encontrada para a conta 986ab179-e28a-4b65-8921-e043c7519f5b
+2026-03-06 15:38:45 | WARNING  |                 |        |      |                      | services.trade_executor:execute_trade:1051 | ⚠️ [TradeExecutor] Configuração de autotrade não encontrada para conta Leandro Souza

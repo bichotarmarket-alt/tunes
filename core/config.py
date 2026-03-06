@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     API_PORT: int = 8000
     API_PREFIX: str = "/api/v1"
 
-    # Database - usa variável de ambiente ou SQLite como fallback
+    # Database - usa variável de ambiente ou SQLite como fallback (apenas em desenvolvimento)
     DATABASE_URL: str = Field(
         default="sqlite+aiosqlite:///./autotrade.db",
         env="DATABASE_URL"

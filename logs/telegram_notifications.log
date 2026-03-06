@@ -1,2 +1,11 @@
-2026-03-06 14:26:49 | INFO     |                 |        |      | services.notifications.telegram_v2:_start_queue_processor:145 | [TelegramV2] Processador de fila iniciado
-2026-03-06 14:26:49 | INFO     |                 |        |      | services.notifications.telegram_v2:start:151 | [TelegramV2] Processador de fila iniciado via start()
+2026-03-06 15:37:54 | INFO     |                 |        |      | services.notifications.telegram_v2:_start_queue_processor:145 | [TelegramV2] Processador de fila iniciado
+2026-03-06 15:37:54 | INFO     |                 |        |      | services.notifications.telegram_v2:start:151 | [TelegramV2] Processador de fila iniciado via start()
+2026-03-06 15:38:40 | SUCCESS  |                 |        |      | services.notifications.telegram:send_message:177 | ✅ Notificação Telegram enviada para chat 54218640...: 
+🔄 <b>AUTOTRADE REABILITADO!</b>
+
+📊 Estratégia: Le...
+2026-03-06 15:38:45 | SUCCESS  |                 |        |      | services.notifications.telegram:send_message:177 | ✅ Notificação Telegram enviada para chat 54218640...: 
+⏸️ <b>AUTOTRADE DESATIVADO!</b>
+
+📊 Estratégia: Le...
+2026-03-06 15:39:02 | INFO     |                 |        |      | services.notifications.telegram_v2:_process_message_queue:186 | [TelegramV2] Processador de fila cancelado
